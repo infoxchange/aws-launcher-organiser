@@ -7,7 +7,7 @@ export default defineConfig({
     version: "0.1.0",
     browser_specific_settings: {
       gecko: {
-        "id": "@aws-launcher-organiser",
+        id: "@aws-launcher-organiser",
         // @ts-expect-error - Introduced recently so not in WXT types yet
         // https://extensionworkshop.com/documentation/develop/firefox-builtin-data-consent/
         data_collection_permissions: {

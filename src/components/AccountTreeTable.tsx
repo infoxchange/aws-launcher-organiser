@@ -144,6 +144,9 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [jsonConfig, setJsonConfig] = useState(JSON.stringify(groups, null, 2));
   const [configError, setConfigError] = useState<string | null>(null);
+  const [editMode, setEditMode] = useState(false);
+  const [editingGroupKey, setEditingGroupKey] = useState<string | null>(null);
+  const [editingGroupName, setEditingGroupName] = useState("");
 
   useEffect(() => {
     // Extract and group accounts from the page
@@ -155,6 +158,11 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
       const roles = await getAccountRoles(accountId);
       setNodes((prev) => setAccountRoles(prev, accountId, roles));
     });
+  }, [groups]);
+
+  useEffect(() => {
+    // Update JSON config when groups change
+    setJsonConfig(JSON.stringify(groups, null, 2));
   }, [groups]);
 
   /**
@@ -236,8 +244,48 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
     }
 
     // Group node - just name
+    const groupKey = node.key as string;
+    const isEditing = editMode && editingGroupKey === groupKey;
+
+    if (isEditing) {
+      return (
+        <div className="group-edit-container" onClick={(e) => e.stopPropagation()}>
+          <input
+            type="text"
+            value={editingGroupName}
+            onChange={(e) => setEditingGroupName(e.target.value)}
+            className="group-edit-input"
+            autoFocus
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (e.key === "Enter") {
+                updateGroupName(groupKey, editingGroupName);
+                setEditingGroupKey(null);
+              } else if (e.key === "Escape") {
+                setEditingGroupKey(null);
+              }
+            }}
+            onBlur={() => {
+              updateGroupName(groupKey, editingGroupName);
+              setEditingGroupKey(null);
+            }}
+          />
+        </div>
+      );
+    }
+
     return (
-      <span className="group-name">
+      <span
+        className={`group-name ${editMode ? "group-name-editable" : ""}`}
+        onClick={(e) => {
+          if (editMode) {
+            e.stopPropagation();
+            setEditingGroupKey(groupKey);
+            setEditingGroupName(data?.name || "");
+          }
+        }}
+      >
         {data?.name} ({countAllAccounts((node as AccountGroupNode).children ?? [])})
       </span>
     );
@@ -263,6 +311,29 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
       next.has(env) ? next.delete(env) : next.add(env);
       return next;
     });
+  };
+
+  const updateGroupName = (groupKey: string, newName: string) => {
+    // Extract the actual group key (remove "group-" prefix)
+    const actualGroupKey = groupKey.startsWith("group-") ? groupKey.substring(6) : groupKey;
+
+    const updateInGroups = (groupsToUpdate: typeof groups): typeof groups => {
+      return groupsToUpdate.map((group) => {
+        if (group.key === actualGroupKey) {
+          return { ...group, name: newName };
+        }
+        if (group.children) {
+          return {
+            ...group,
+            children: updateInGroups(group.children),
+          };
+        }
+        return group;
+      });
+    };
+
+    const updated = updateInGroups(groups);
+    setGroups(updated);
   };
 
   const visibleNodes = (() => {
@@ -302,17 +373,27 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
             ))}
           </ButtonGroup>
         </div>
-        <Button
-          icon="pi pi-cog"
-          rounded
-          text
-          onClick={() => {
-            setShowSettings(true);
-            setJsonConfig(JSON.stringify(groups, null, 2));
-            setConfigError(null);
-          }}
-          className="settings-button"
-        />
+        <div className="group">
+          <Button
+            icon="pi pi-pencil"
+            label={editMode ? "Stop Editing" : undefined}
+            rounded
+            text
+            onClick={() => setEditMode(!editMode)}
+            className={`edit-button ${editMode ? "edit-button-active" : ""}`}
+          />
+          <Button
+            icon="pi pi-cog"
+            rounded
+            text
+            onClick={() => {
+              setShowSettings(true);
+              setJsonConfig(JSON.stringify(groups, null, 2));
+              setConfigError(null);
+            }}
+            className="settings-button"
+          />
+        </div>
       </div>
       <Dialog
         header="Settings"
