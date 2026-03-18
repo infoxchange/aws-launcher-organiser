@@ -1,0 +1,5 @@
+import { defineWebExtConfig } from 'wxt';
+
+export default defineWebExtConfig({
+  startUrls: ["https://id-for-your-aws-org.awsapps.com/start/"], // <-- UPDATE THIS URL TO MATCH YOUR AWS SSO START PAGE
+});

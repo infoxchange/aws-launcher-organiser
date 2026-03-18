@@ -1,0 +1,4 @@
+stats.html
+stats-*.json
+.output/
+.wxt/

@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.dist/
+.wxt/
+*.zip
+.DS_Store
+.vscode-test/
+.env
+.env.local
+.env.*.local
+coverage/
+.nyc_output/
+.output/
+stats.html
+stats-*.json
+web-ext.config.ts

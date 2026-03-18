@@ -1,0 +1,189 @@
+#aws-account-tree-table {
+  --color-bg: #ffffff;
+  --color-bg-header: #f8f8f8;
+  --color-bg-hover: #f0f0f0;
+  --color-text: #333333;
+  --color-text-heading: #1a1a1a;
+  --color-border: #dddddd;
+
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background-color: transparent;
+  color: var(--color-text);
+
+  .p-treenode-content {
+    > img {
+      width: 20px;
+      height: 20px;
+    }
+    > .pi {
+      font-size: 2rem;
+    }
+  }
+
+  .account-name,
+  .group-name {
+    font-weight: bold;
+    font-size: 1.3em;
+  }
+}
+
+#aws-account-tree-table .filter-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+
+  > .group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .settings-button span {
+    font-size: 1.7rem;
+  }
+}
+
+#aws-account-tree-table .search-input {
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-size: 14px;
+  color: var(--color-text);
+  background-color: var(--color-bg);
+  min-width: 200px;
+}
+
+#aws-account-tree-table .search-input::placeholder {
+  color: var(--color-text);
+  opacity: 0.6;
+}
+
+#aws-account-tree-table .search-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+#aws-account-tree-table h3 {
+  color: var(--color-text-heading);
+}
+
+#aws-account-tree-table .p-tree {
+  background-color: transparent;
+  border: none;
+  gap: 0;
+}
+
+#aws-account-tree-table .p-treenode-content {
+  padding: 0.5rem 0;
+  background-color: transparent;
+  color: var(--color-text);
+  border: none;
+}
+
+#aws-account-tree-table .p-treenode-content:hover {
+  background-color: var(--color-bg-hover);
+}
+
+#aws-account-tree-table .p-tree-container {
+  gap: 0;
+}
+
+#aws-account-tree-table .account-id {
+  color: var(--color-text);
+  opacity: 0.7;
+  font-size: 0.9em;
+}
+
+#aws-account-tree-table .account-roles {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: 8px;
+}
+
+#aws-account-tree-table .account-role-link {
+  font-size: 0.85em;
+  padding: 1px 6px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  text-decoration: none;
+}
+
+#aws-account-tree-table .environment-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+#aws-account-tree-table .settings-button {
+  margin-left: auto;
+}
+
+#aws-account-tree-table .settings-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#aws-account-tree-table .settings-content label {
+  font-weight: 500;
+  color: var(--color-text-heading);
+}
+
+#aws-account-tree-table .json-textarea {
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-family: "Monaco", "Menlo", "Ubuntu Mono", monospace;
+  font-size: 12px;
+  color: var(--color-text);
+  background-color: var(--color-bg);
+  resize: vertical;
+}
+
+#aws-account-tree-table .json-textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+#aws-account-tree-table .config-error {
+  padding: 8px 12px;
+  background-color: #fee2e2;
+  border: 1px solid #fca5a5;
+  border-radius: 4px;
+  color: #dc2626;
+  font-size: 13px;
+  margin-top: 8px;
+}
+
+#aws-account-tree-table .dialog-buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+  justify-content: flex-end;
+}
+
+@media (prefers-color-scheme: dark) {
+  #aws-account-tree-table {
+    --color-bg: #1b1b1b;
+    --color-bg-header: #242424;
+    --color-bg-hover: #2e2e2e;
+    --color-text: #e0e0e0;
+    --color-text-heading: #ffffff;
+    --color-border: #404040;
+  }
+
+  #aws-account-tree-table .config-error {
+    background-color: #7f1d1d;
+    border-color: #b91c1c;
+    color: #fca5a5;
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "name": "aws-launcher-organiser",
+  "displayName": "AWS Launcher Organiser",
+  "version": "0.1.0",
+  "description": "Browser extension to organise AWS accounts on the launcher page",
+  "type": "module",
+  "scripts": {
+    "dev": "wxt",
+    "build": "wxt build",
+    "build:firefox": "wxt build --browser firefox",
+    "build:chrome": "wxt build --browser chrome",
+    "build:all": "wxt build --browser firefox && wxt build --browser chrome",
+    "zip": "wxt zip",
+    "zip:firefox": "wxt zip --browser firefox",
+    "zip:chrome": "wxt zip --browser chrome",
+    "lint": "biome check --verbose",
+    "lint:fix": "biome check --apply",
+    "format": "biome format --write"
+  },
+  "dependencies": {
+    "primeicons": "^7.0.0",
+    "primereact": "^10.9.0",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "zustand": "^5.0.12"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.7",
+    "@types/node": "^25.5.0",
+    "@types/react": "^19.2.3",
+    "@types/react-dom": "^19.2.3",
+    "typescript": "^5.9.3",
+    "wxt": "^0.20.19"
+  },
+  "private": true
+}
