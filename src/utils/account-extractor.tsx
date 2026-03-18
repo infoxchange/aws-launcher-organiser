@@ -16,6 +16,7 @@ export interface Account {
   email: string;
   environment?: Environment;
   roles?: AccountRole[];
+  description?: string;
 }
 
 export interface AccountGroupNode extends TreeNode {

@@ -8,6 +8,7 @@ export interface PredefinedGroup {
   matcher?: string | string[];
   children?: PredefinedGroup[];
   expandedByDefault?: boolean;
+  description?: string;
 }
 
 const defaultGroups: PredefinedGroup[] = [];

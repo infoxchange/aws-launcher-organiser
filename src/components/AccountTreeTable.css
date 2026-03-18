@@ -16,8 +16,18 @@
       width: 20px;
       height: 20px;
     }
+
     > .pi {
       font-size: 2rem;
+    }
+
+    padding: 0.5rem 0;
+    background-color: transparent;
+    color: var(--color-text);
+    border: none;
+
+    &:hover {
+      background-color: var(--color-bg-hover);
     }
   }
 
@@ -26,195 +36,226 @@
     font-weight: bold;
     font-size: 1.3em;
   }
-}
 
-#aws-account-tree-table .filter-controls {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 16px;
+  .filter-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
 
-  > .group {
+    > .group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    button span.pi {
+      font-size: 1.7rem;
+    }
+  }
+
+  .search-input {
+    padding: 8px 12px;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    font-size: 1.2rem;
+    color: var(--color-text);
+    background-color: var(--color-bg);
+    min-width: 200px;
+
+    &::placeholder {
+      color: var(--color-text);
+      opacity: 0.6;
+    }
+
+    &:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+    }
+  }
+
+  h3 {
+    color: var(--color-text-heading);
+  }
+
+  .p-tree {
+    background-color: transparent;
+    border: none;
+    gap: 0;
+  }
+
+  .p-tree-container {
+    gap: 0;
+  }
+
+  .account-id {
+    color: var(--color-text);
+    opacity: 0.7;
+    font-size: 1.2rem;
+  }
+
+  .account-roles {
+    display: flex;
+    gap: 6px;
+  }
+
+  .account-role-link {
+    font-size: 1.2rem;
+    padding: 1px 6px;
+    border: 1px solid currentColor;
+    border-radius: 3px;
+    text-decoration: none;
+  }
+
+  .environment-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    vertical-align: middle;
+    flex-shrink: 0;
+
+    &.dev,
+    &.sandbox {
+      background-color: #22c55e;
+    }
+
+    &.test {
+      background-color: #eab308;
+    }
+
+    &.uat {
+      background-color: #f97316;
+    }
+
+    &.prod {
+      background-color: #ef4444;
+    }
+
+    &.unknown {
+      background-color: #9ca3af;
+    }
+  }
+
+  .group-edit-input {
+    padding: 4px 8px;
+    border: 2px solid #3b82f6;
+    border-radius: 3px;
+    font-size: 1.3em;
+    font-weight: bold;
+    color: var(--color-text);
+    background-color: var(--color-bg);
+    font-family: inherit;
+
+    &:focus {
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+    }
+  }
+
+  .action-buttons {
+    display: flex;
+    gap: 8px;
+    margin-left: auto;
+  }
+
+  .edit-button {
+    transition: color 0.2s ease;
+
+    &-active {
+      color: #3b82f6;
+    }
+  }
+
+  .settings-button {
+    margin-left: 0;
+  }
+
+  .account-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .account-name-group {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+  }
+
+  .account-description {
+    font-size: 1.2rem;
+    color: var(--color-text);
+    opacity: 0.8;
+    margin-top: 4px;
+    margin-left: 14px;
+    font-style: italic;
+  }
+
+  .group-container {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .group-content {
     display: flex;
     align-items: center;
     gap: 8px;
+    flex-wrap: wrap;
+
+    &-editable {
+      .group-name,
+      .group-description {
+        cursor: pointer;
+        padding: 2px 6px;
+        border-radius: 3px;
+        transition: background-color 0.2s ease;
+
+        &:hover {
+          background-color: rgba(59, 130, 246, 0.1);
+        }
+      }
+    }
   }
 
-  button span.pi {
-    font-size: 1.7rem;
+  .group-description {
+    font-size: 1.2rem;
+    color: var(--color-text);
+    opacity: 0.8;
+    font-style: italic;
   }
-}
 
-#aws-account-tree-table .search-input {
-  padding: 8px 12px;
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  font-size: 14px;
-  color: var(--color-text);
-  background-color: var(--color-bg);
-  min-width: 200px;
-}
+  .group-header {
+    display: flex;
+    align-items: center;
+  }
 
-#aws-account-tree-table .search-input::placeholder {
-  color: var(--color-text);
-  opacity: 0.6;
-}
+  .group-description-input {
+    padding: 6px 8px;
+    border: 2px solid #3b82f6;
+    border-radius: 3px;
+    font-size: 1.2rem;
+    color: var(--color-text);
+    background-color: var(--color-bg);
+    font-family: inherit;
+    min-height: 60px;
+    resize: vertical;
+    width: 100%;
+    max-width: 400px;
 
-#aws-account-tree-table .search-input:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
-}
+    &:focus {
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+    }
+  }
 
-#aws-account-tree-table h3 {
-  color: var(--color-text-heading);
-}
-
-#aws-account-tree-table .p-tree {
-  background-color: transparent;
-  border: none;
-  gap: 0;
-}
-
-#aws-account-tree-table .p-treenode-content {
-  padding: 0.5rem 0;
-  background-color: transparent;
-  color: var(--color-text);
-  border: none;
-}
-
-#aws-account-tree-table .p-treenode-content:hover {
-  background-color: var(--color-bg-hover);
-}
-
-#aws-account-tree-table .p-tree-container {
-  gap: 0;
-}
-
-#aws-account-tree-table .account-id {
-  color: var(--color-text);
-  opacity: 0.7;
-  font-size: 0.9em;
-}
-
-#aws-account-tree-table .account-roles {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-left: 8px;
-}
-
-#aws-account-tree-table .account-role-link {
-  font-size: 0.85em;
-  padding: 1px 6px;
-  border: 1px solid currentColor;
-  border-radius: 3px;
-  text-decoration: none;
-}
-
-#aws-account-tree-table .environment-dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  margin-right: 6px;
-  vertical-align: middle;
-}
-
-#aws-account-tree-table .group-name-editable {
-  cursor: pointer;
-  padding: 2px 6px;
-  border-radius: 3px;
-  transition: background-color 0.2s ease;
-}
-
-#aws-account-tree-table .group-name-editable:hover {
-  background-color: rgba(59, 130, 246, 0.1);
-}
-
-#aws-account-tree-table .group-edit-container {
-  display: inline-flex;
-  align-items: center;
-}
-
-#aws-account-tree-table .group-edit-input {
-  padding: 4px 8px;
-  border: 2px solid #3b82f6;
-  border-radius: 3px;
-  font-size: 1.3em;
-  font-weight: bold;
-  color: var(--color-text);
-  background-color: var(--color-bg);
-  font-family: inherit;
-}
-
-#aws-account-tree-table .group-edit-input:focus {
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-}
-
-#aws-account-tree-table .action-buttons {
-  display: flex;
-  gap: 8px;
-  margin-left: auto;
-}
-
-#aws-account-tree-table .edit-button {
-  transition: color 0.2s ease;
-}
-
-#aws-account-tree-table .edit-button-active {
-  color: #3b82f6;
-}
-
-#aws-account-tree-table .settings-button {
-  margin-left: 0;
-}
-
-#aws-account-tree-table .settings-content {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-#aws-account-tree-table .settings-content label {
-  font-weight: 500;
-  color: var(--color-text-heading);
-}
-
-#aws-account-tree-table .json-textarea {
-  padding: 8px 12px;
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  font-family: "Monaco", "Menlo", "Ubuntu Mono", monospace;
-  font-size: 12px;
-  color: var(--color-text);
-  background-color: var(--color-bg);
-  resize: vertical;
-}
-
-#aws-account-tree-table .json-textarea:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
-}
-
-#aws-account-tree-table .config-error {
-  padding: 8px 12px;
-  background-color: #fee2e2;
-  border: 1px solid #fca5a5;
-  border-radius: 4px;
-  color: #dc2626;
-  font-size: 13px;
-  margin-top: 8px;
-}
-
-#aws-account-tree-table .dialog-buttons {
-  display: flex;
-  gap: 8px;
-  margin-top: 16px;
-  justify-content: flex-end;
+  .add-description-button {
+    margin-left: 0;
+  }
 }
 
 @media (prefers-color-scheme: dark) {
@@ -225,23 +266,30 @@
     --color-text: #e0e0e0;
     --color-text-heading: #ffffff;
     --color-border: #404040;
-  }
 
-  #aws-account-tree-table .config-error {
-    background-color: #7f1d1d;
-    border-color: #b91c1c;
-    color: #fca5a5;
-  }
+    .group-edit-input {
+      border-color: #60a5fa;
 
-  #aws-account-tree-table .group-name-editable:hover {
-    background-color: rgba(59, 130, 246, 0.2);
-  }
+      &:focus {
+        box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.3);
+      }
+    }
 
-  #aws-account-tree-table .group-edit-input {
-    border-color: #60a5fa;
-  }
+    .group-content-editable {
+      .group-name,
+      .group-description {
+        &:hover {
+          background-color: rgba(59, 130, 246, 0.2);
+        }
+      }
+    }
 
-  #aws-account-tree-table .group-edit-input:focus {
-    box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.3);
+    .group-description-input {
+      border-color: #60a5fa;
+
+      &:focus {
+        box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.3);
+      }
+    }
   }
 }

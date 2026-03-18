@@ -1,7 +1,6 @@
 import { Tree } from "primereact/tree";
 import { Button } from "primereact/button";
 import { ButtonGroup } from "primereact/buttongroup";
-import { Dialog } from "primereact/dialog";
 import type React from "react";
 import { useEffect, useState } from "react";
 import "primereact/resources/themes/lara-light-blue/theme.css";
@@ -21,6 +20,7 @@ import {
 } from "../utils/account-extractor";
 import { useGroupsStore } from "../utils/groupsStore";
 import { TreeNode } from "primereact/treenode";
+import { SettingsDialog } from "./SettingsDialog";
 
 export interface AccountTreeTableProps {
   onAccountSelect?: (accountId: string) => void;
@@ -147,6 +147,8 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
   const [editMode, setEditMode] = useState(false);
   const [editingGroupKey, setEditingGroupKey] = useState<string | null>(null);
   const [editingGroupName, setEditingGroupName] = useState("");
+  const [editingDescriptionKey, setEditingDescriptionKey] = useState<string | null>(null);
+  const [editingDescription, setEditingDescription] = useState("");
 
   useEffect(() => {
     // Extract and group accounts from the page
@@ -168,24 +170,6 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
   /**
    * Render custom template for each tree node
    */
-  const getEnvironmentColor = (env: Environment | undefined, accountName: string): string => {
-    if (accountName.endsWith("-sandbox")) {
-      return "#22c55e"; // Green
-    }
-    switch (env) {
-      case "dev":
-        return "#22c55e"; // Green
-      case "test":
-        return "#eab308"; // Greenish yellow
-      case "uat":
-        return "#f97316"; // Orange
-      case "prod":
-        return "#ef4444"; // Red
-      default:
-        return "#9ca3af"; // Gray for unknown
-    }
-  };
-
   const nodeTemplate = (node: TreeNode) => {
     const data = node.data;
 
@@ -194,50 +178,52 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
       const account = data as Account;
       return (
         <div className="account-node">
-          {(account.environment || account.name.endsWith("-sandbox")) && (
-            <span
-              className="environment-dot"
-              style={{
-                backgroundColor: getEnvironmentColor(account.environment, account.name),
-                display: "inline-block",
-                width: "8px",
-                height: "8px",
-                borderRadius: "50%",
-                marginRight: "6px",
-                verticalAlign: "middle",
-              }}
-            />
-          )}
-          <span className="account-name">{account.name}</span>
-          <span className="account-id"> ({account.id})</span>
-          {account.roles ? (
-            <div className="account-roles">
-              {account.roles.map((role) => (
-                <a
-                  key={role.name}
-                  href={role.consoleUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="account-role-link"
-                >
-                  {role.name}
-                </a>
-              ))}
-            </div>
-          ) : (
-            <Button
-              size="small"
-              text
-              label="Load roles"
-              onClick={(e) => {
-                e.stopPropagation();
-                getAccountRoles(account.id)
-                  .then((roles) => {
-                    setNodes((prev) => setAccountRoles(prev, account.id, roles));
-                  })
-                  .catch(console.error);
-              }}
-            />
+          <div className="account-header">
+            <span className="account-name-group">
+              {(account.environment || account.name.endsWith("-sandbox")) && (
+                <span
+                  className={`environment-dot ${
+                    account.name.endsWith("-sandbox")
+                      ? "sandbox"
+                      : account.environment || "unknown"
+                  }`}
+                />
+              )}
+              <span className="account-name">{account.name}</span>
+            </span>
+            <span className="account-id">({account.id})</span>
+            {account.roles ? (
+              <div className="account-roles">
+                {account.roles.map((role) => (
+                  <a
+                    key={role.name}
+                    href={role.consoleUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="account-role-link"
+                  >
+                    {role.name}
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <Button
+                size="small"
+                text
+                label="Load roles"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  getAccountRoles(account.id)
+                    .then((roles) => {
+                      setNodes((prev) => setAccountRoles(prev, account.id, roles));
+                    })
+                    .catch(console.error);
+                }}
+              />
+            )}
+          </div>
+          {account.description && (
+            <div className="account-description">{account.description}</div>
           )}
         </div>
       );
@@ -245,9 +231,10 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
 
     // Group node - just name
     const groupKey = node.key as string;
-    const isEditing = editMode && editingGroupKey === groupKey;
+    const isEditingName = editMode && editingGroupKey === groupKey;
+    const isEditingDesc = editMode && editingDescriptionKey === groupKey;
 
-    if (isEditing) {
+    if (isEditingName) {
       return (
         <div className="group-edit-container" onClick={(e) => e.stopPropagation()}>
           <input
@@ -275,19 +262,89 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
       );
     }
 
+    if (isEditingDesc) {
+      return (
+        <div className="group-edit-container" onClick={(e) => e.stopPropagation()}>
+          <span
+            className="group-name"
+            onClick={(e) => {
+              if (editMode) {
+                e.stopPropagation();
+                setEditingGroupKey(groupKey);
+                setEditingGroupName(data?.name || "");
+              }
+            }}
+          >
+            {data?.name} ({countAllAccounts((node as AccountGroupNode).children ?? [])})
+          </span>
+          <textarea
+            value={editingDescription}
+            onChange={(e) => setEditingDescription(e.target.value)}
+            className="group-description-input"
+            autoFocus
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (e.key === "Escape") {
+                setEditingDescriptionKey(null);
+              }
+            }}
+            onBlur={() => {
+              updateGroupDescription(groupKey, editingDescription);
+              setEditingDescriptionKey(null);
+            }}
+            placeholder="Add description..."
+          />
+        </div>
+      );
+    }
+
+    // Get the actual group data from the groups array
+    const actualGroupKey = groupKey.startsWith("group-") ? groupKey.substring(6) : groupKey;
+    const groupData = findGroupByKey(actualGroupKey);
+
     return (
-      <span
-        className={`group-name ${editMode ? "group-name-editable" : ""}`}
-        onClick={(e) => {
-          if (editMode) {
-            e.stopPropagation();
-            setEditingGroupKey(groupKey);
-            setEditingGroupName(data?.name || "");
-          }
-        }}
-      >
-        {data?.name} ({countAllAccounts((node as AccountGroupNode).children ?? [])})
-      </span>
+      <div className={`group-content ${editMode ? "group-content-editable" : ""}`}>
+        <span
+          className="group-name"
+          onClick={(e) => {
+            if (editMode) {
+              e.stopPropagation();
+              setEditingGroupKey(groupKey);
+              setEditingGroupName(data?.name || "");
+            }
+          }}
+        >
+          {data?.name} ({countAllAccounts((node as AccountGroupNode).children ?? [])})
+        </span>
+        {groupData?.description ? (
+          <span
+            className="group-description"
+            onClick={(e) => {
+              if (editMode) {
+                e.stopPropagation();
+                setEditingDescriptionKey(groupKey);
+                setEditingDescription(groupData.description || "");
+              }
+            }}
+          >
+            {groupData.description}
+          </span>
+        ) : editMode ? (
+          <Button
+            size="small"
+            text
+            label="Add description"
+            icon="pi pi-plus"
+            onClick={(e) => {
+              e.stopPropagation();
+              setEditingDescriptionKey(groupKey);
+              setEditingDescription("");
+            }}
+            className="add-description-button"
+          />
+        ) : null}
+      </div>
     );
   };
 
@@ -321,6 +378,44 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
       return groupsToUpdate.map((group) => {
         if (group.key === actualGroupKey) {
           return { ...group, name: newName };
+        }
+        if (group.children) {
+          return {
+            ...group,
+            children: updateInGroups(group.children),
+          };
+        }
+        return group;
+      });
+    };
+
+    const updated = updateInGroups(groups);
+    setGroups(updated);
+  };
+
+  const findGroupByKey = (actualGroupKey: string): typeof groups[0] | null => {
+    const search = (groupsToSearch: typeof groups): typeof groups[0] | null => {
+      for (const group of groupsToSearch) {
+        if (group.key === actualGroupKey) {
+          return group;
+        }
+        if (group.children) {
+          const found = search(group.children);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
+    return search(groups);
+  };
+
+  const updateGroupDescription = (groupKey: string, newDescription: string) => {
+    const actualGroupKey = groupKey.startsWith("group-") ? groupKey.substring(6) : groupKey;
+
+    const updateInGroups = (groupsToUpdate: typeof groups): typeof groups => {
+      return groupsToUpdate.map((group) => {
+        if (group.key === actualGroupKey) {
+          return { ...group, description: newDescription };
         }
         if (group.children) {
           return {
@@ -395,67 +490,18 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
           />
         </div>
       </div>
-      <Dialog
-        header="Settings"
+      <SettingsDialog
         visible={showSettings}
         onHide={() => {
           setShowSettings(false);
           setJsonConfig(JSON.stringify(groups, null, 2));
           setConfigError(null);
         }}
-        modal
-        style={{ width: "50vw" }}
-      >
-        <div className="settings-content">
-          <label htmlFor="json-config">Configuration (JSON)</label>
-          <textarea
-            id="json-config"
-            value={jsonConfig}
-            onChange={(e) => {
-              setJsonConfig(e.target.value);
-              setConfigError(null);
-            }}
-            rows={10}
-            className="json-textarea"
-          />
-          {configError && <div className="config-error">{configError}</div>}
-          <div className="dialog-buttons">
-            <Button
-              label="Save"
-              onClick={() => {
-                try {
-                  const parsed = JSON.parse(jsonConfig);
-                  setGroups(parsed);
-                  setShowSettings(false);
-                  setConfigError(null);
-                } catch (e) {
-                  setConfigError(`Invalid JSON: ${e instanceof Error ? e.message : String(e)}`);
-                }
-              }}
-              className="save-button"
-            />
-            <Button
-              label="Reset to Defaults"
-              outlined
-              onClick={() => {
-                const { resetToDefaults } = useGroupsStore.getState();
-                resetToDefaults();
-                setJsonConfig(JSON.stringify(useGroupsStore.getState().groups, null, 2));
-                setConfigError(null);
-              }}
-            />
-            <Button
-              label="Cancel"
-              outlined
-              onClick={() => {
-                setShowSettings(false);
-                setJsonConfig(JSON.stringify(groups, null, 2));
-                setConfigError(null);
-              }}
-            />
-          </div>
-        </div>
-      </Dialog>
+        jsonConfig={jsonConfig}
+        onConfigChange={setJsonConfig}
+        configError={configError}
+        onConfigError={setConfigError}
+      />
       {nodes.length === 0 ? (
         <p>No accounts found on this page</p>
       ) : (
