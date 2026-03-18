@@ -5,7 +5,7 @@ import { AccountTreeTable } from "../src/components/AccountTreeTable";
 import "../src/styles/global.css";
 
 export default defineContentScript({
-  matches: ["*://*.aws.amazon.com/*", "*://*.awsapps.com/*"],
+  matches: ["https://*.awsapps.com/start/"],
   main(_ctx) {
     console.log("AWS SSO Account Grouper content script loaded");
 
