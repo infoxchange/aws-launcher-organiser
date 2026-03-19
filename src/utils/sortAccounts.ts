@@ -1,5 +1,5 @@
 import type { Account, AccountGroupNode, AccountNode } from "./account-extractor";
-import type { SortConfig, TagConfig } from "./config-schema";
+import type { Group, SortConfig, TagConfig } from "./config-schema";
 
 /**
  * Compares two accounts based on tag configuration.
@@ -115,33 +115,59 @@ function compareBySubstring(
  * @param nodes Account group nodes to sort
  * @param sortBy Sort configuration array
  * @param tags Available tags for reference
+ * @param groups Groups configuration for sorting nested groups
  * @returns Sorted account group nodes
  */
 export function sortAccountsByConfig(
   nodes: AccountGroupNode[],
-  sortBy: SortConfig[],
-  tags: TagConfig[]
+  sortBy: SortConfig[] | undefined,
+  tags: TagConfig[],
+  groups?: Group[]
 ): AccountGroupNode[] {
   if (!sortBy || sortBy.length === 0) {
     return nodes;
   }
+
+  /**
+   * Helper function to get the order index of a group in the groups config
+   */
+  const getGroupOrderIndex = (groupKey: string, groupsToSearch: Group[] = []): number => {
+    for (let i = 0; i < groupsToSearch.length; i++) {
+      if (groupsToSearch[i].key === groupKey) {
+        return i;
+      }
+      // Search in nested groups
+      if ((groupsToSearch[i].children?.length ?? 0) > 0) {
+        const nestedIndex = getGroupOrderIndex(groupKey, groupsToSearch[i].children);
+        if (nestedIndex !== -1) {
+          return nestedIndex;
+        }
+      }
+    }
+    return -1;
+  };
 
   return nodes.map((node) => {
     const groupNode = node as AccountGroupNode;
     const accountNodes = groupNode.children?.filter((child) => "id" in child.data) as
       | AccountNode[]
       | undefined;
-    const nestedGroups = groupNode.children?.filter((child) => !("id" in child.data)) as
-      | AccountGroupNode[]
-      | undefined;
+    const buttonNodes = groupNode.children?.filter(
+      (child) => (child.data as Record<string, unknown>).isAddButton === true
+    ) as AccountNode[] | undefined;
+    const nestedGroups = groupNode.children?.filter(
+      (child) => !("id" in child.data) && !("isAddButton" in child.data)
+    ) as AccountGroupNode[] | undefined;
 
     if (!accountNodes || accountNodes.length === 0) {
       // No accounts to sort, but recursively sort nested groups
       if (nestedGroups && nestedGroups.length > 0) {
-        const sortedNestedGroups = sortAccountsByConfig(nestedGroups, sortBy, tags);
+        const sortedNestedGroups = sortAccountsByConfig(nestedGroups, sortBy, tags, groups);
         return {
           ...groupNode,
-          children: sortedNestedGroups,
+          children: buttonNodes?.length
+            ? [...sortedNestedGroups, ...buttonNodes]
+            : sortedNestedGroups,
         };
       }
       return node;
@@ -174,12 +200,39 @@ export function sortAccountsByConfig(
     // Recursively sort nested groups
     const sortedNestedGroups =
       nestedGroups && nestedGroups.length > 0
-        ? sortAccountsByConfig(nestedGroups, sortBy, tags)
+        ? sortAccountsByConfig(nestedGroups, sortBy, tags, groups)
         : [];
 
+    // Sort nested groups based on their order in the groups config
+    if (sortedNestedGroups.length > 1 && groups) {
+      sortedNestedGroups.sort((aNode, bNode) => {
+        // Extract the actual group key (remove "group-" prefix)
+        const aKey = (aNode.key as string).replace(/^group-/, "");
+        const bKey = (bNode.key as string).replace(/^group-/, "");
+
+        const aIndex = getGroupOrderIndex(aKey, groups);
+        const bIndex = getGroupOrderIndex(bKey, groups);
+
+        // If neither group is in config, maintain original order
+        if (aIndex === -1 && bIndex === -1) return 0;
+
+        // Group in config comes before group not in config
+        if (aIndex === -1) return 1;
+        if (bIndex === -1) return -1;
+
+        // Both in config, sort by their position
+        return aIndex - bIndex;
+      });
+    }
+
+    // Groups should always appear before accounts, button nodes between them
     return {
       ...groupNode,
-      children: [...(sortedAccounts as (AccountGroupNode | AccountNode)[]), ...sortedNestedGroups],
+      children: [
+        ...sortedNestedGroups,
+        ...(buttonNodes || []),
+        ...(sortedAccounts as (AccountGroupNode | AccountNode)[]),
+      ],
     };
   });
 }

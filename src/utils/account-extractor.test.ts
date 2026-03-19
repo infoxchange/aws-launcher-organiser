@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Account, AccountGroupNode, Group } from "./account-extractor";
 import { getAccountTree } from "./account-extractor";
 import type { TagConfig } from "./config-schema";
+import { getNodeId, type TestNode } from "./test-helpers";
 
 // Test helper to create an account
 function createAccount(id: string, name: string): Account {
@@ -51,12 +52,14 @@ describe("getAccountTree", () => {
       const result = getAccountTree(accounts, groups);
 
       expect(result[0].data.name).toBe("Production");
-      expect(result[0].children).toHaveLength(1);
-      expect((result[0].children![0] as any).data.id).toBe("123");
+      const prodChildren: TestNode[] = result[0].children ?? [];
+      expect(prodChildren).toHaveLength(1);
+      expect(getNodeId(prodChildren[0])).toBe("123");
 
       expect(result[1].data.name).toBe("Development");
-      expect(result[1].children).toHaveLength(1);
-      expect((result[1].children![0] as any).data.id).toBe("456");
+      const devChildren: TestNode[] = result[1].children ?? [];
+      expect(devChildren).toHaveLength(1);
+      expect(getNodeId(devChildren[0])).toBe("456");
     });
 
     it("should place unmatched accounts in 'Other' group", () => {
@@ -70,8 +73,9 @@ describe("getAccountTree", () => {
 
       expect(result).toHaveLength(2);
       expect(result[1].data.name).toBe("Other");
-      expect(result[1].children).toHaveLength(1);
-      expect((result[1].children![0] as any).data.id).toBe("456");
+      const otherChildren: TestNode[] = result[1].children ?? [];
+      expect(otherChildren).toHaveLength(1);
+      expect(getNodeId(otherChildren[0])).toBe("456");
     });
 
     it("should not create 'Other' group if all accounts match", () => {
@@ -111,18 +115,22 @@ describe("getAccountTree", () => {
       expect(cloudGroup.children).toHaveLength(2); // prod and dev groups
 
       // Children are sorted alphabetically
-      const devGroup = cloudGroup.children![0] as AccountGroupNode;
+      const cloudChildren = (cloudGroup.children ?? []) as AccountGroupNode[];
+      const devGroup = cloudChildren[0];
       expect(devGroup.data.name).toBe("Development");
-      expect(devGroup.children).toHaveLength(1);
-      expect((devGroup.children![0] as any).data.id).toBe("456");
+      const devGroupChildren: TestNode[] = devGroup.children ?? [];
+      expect(devGroupChildren).toHaveLength(1);
+      expect(getNodeId(devGroupChildren[0])).toBe("456");
 
-      const prodGroup = cloudGroup.children![1] as AccountGroupNode;
+      const prodGroup = cloudChildren[1];
       expect(prodGroup.data.name).toBe("Production");
-      expect(prodGroup.children).toHaveLength(1);
-      expect((prodGroup.children![0] as any).data.id).toBe("123");
+      const prodGroupChildren: TestNode[] = prodGroup.children ?? [];
+      expect(prodGroupChildren).toHaveLength(1);
+      expect(getNodeId(prodGroupChildren[0])).toBe("123");
 
       expect(result[1].data.name).toBe("Other");
-      expect((result[1].children![0] as any).data.id).toBe("789");
+      const otherGroupChildren: TestNode[] = result[1].children ?? [];
+      expect(getNodeId(otherGroupChildren[0])).toBe("789");
     });
 
     it("should include empty nested groups in the tree", () => {
@@ -138,8 +146,9 @@ describe("getAccountTree", () => {
       const result = getAccountTree(accounts, groups);
 
       const cloudGroup = result[0];
-      expect(cloudGroup.children).toHaveLength(3); // All three nested groups should be present
-      expect(cloudGroup.children!.map((c) => (c as any).data.name)).toEqual([
+      const cloudGroupChildren = (cloudGroup.children ?? []) as AccountGroupNode[];
+      expect(cloudGroupChildren).toHaveLength(3); // All three nested groups should be present
+      expect(cloudGroupChildren.map((c) => c.data.name)).toEqual([
         "Development",
         "Production",
         "Staging",
@@ -162,8 +171,9 @@ describe("getAccountTree", () => {
 
       const cloudGroup = result[0];
       // Accounts should be in the second-level groups, not in the parent
-      expect(cloudGroup.children![0].children).toHaveLength(1);
-      expect(cloudGroup.children![1].children).toHaveLength(1);
+      const cloudGroupChildren2 = (cloudGroup.children ?? []) as AccountGroupNode[];
+      expect(cloudGroupChildren2[0].children).toHaveLength(1);
+      expect(cloudGroupChildren2[1].children).toHaveLength(1);
     });
   });
 
@@ -189,20 +199,23 @@ describe("getAccountTree", () => {
       expect(awsGroup.data.name).toBe("AWS Accounts");
       expect(awsGroup.children).toHaveLength(1);
 
-      const usRegion = awsGroup.children![0] as AccountGroupNode;
+      const [usRegion] = (awsGroup.children ?? []) as AccountGroupNode[];
       expect(usRegion.data.name).toBe("US Region");
       expect(usRegion.children).toHaveLength(2); // dev and prod groups
 
       // Children are sorted alphabetically
-      const devGroup = usRegion.children![0] as AccountGroupNode;
+      const usRegionChildren = (usRegion.children ?? []) as AccountGroupNode[];
+      const devGroup = usRegionChildren[0];
       expect(devGroup.data.name).toBe("Development");
-      expect(devGroup.children).toHaveLength(1);
-      expect((devGroup.children![0] as any).data.id).toBe("2");
+      const devGroupChildren: TestNode[] = devGroup.children ?? [];
+      expect(devGroupChildren).toHaveLength(1);
+      expect(getNodeId(devGroupChildren[0])).toBe("2");
 
-      const prodGroup = usRegion.children![1] as AccountGroupNode;
+      const prodGroup = usRegionChildren[1];
       expect(prodGroup.data.name).toBe("Production");
-      expect(prodGroup.children).toHaveLength(1);
-      expect((prodGroup.children![0] as any).data.id).toBe("1");
+      const prodGroupChildren: TestNode[] = prodGroup.children ?? [];
+      expect(prodGroupChildren).toHaveLength(1);
+      expect(getNodeId(prodGroupChildren[0])).toBe("1");
     });
   });
 
@@ -217,8 +230,12 @@ describe("getAccountTree", () => {
       const result = getAccountTree(accounts, groups, tags);
 
       const prodGroup = result[0];
-      const accountNode = prodGroup.children![0] as any;
-      expect(accountNode.data.tags).toContain("prod");
+      const [accountNode] = prodGroup.children ?? [];
+      expect(getNodeId(accountNode)).toBe("123");
+      const accountNodeData = accountNode.data;
+      if ("tags" in accountNodeData) {
+        expect(accountNodeData.tags).toContain("prod");
+      }
     });
   });
 
@@ -233,7 +250,8 @@ describe("getAccountTree", () => {
 
       const allGroup = result[0] as AccountGroupNode;
       // Account should be placed in the deepest matching group (prod), not in All
-      expect(allGroup.children![0].children).toHaveLength(1);
+      const [allGroupFirstChild] = (allGroup.children ?? []) as AccountGroupNode[];
+      expect(allGroupFirstChild.children).toHaveLength(1);
     });
 
     it("should sort children by name", () => {
@@ -253,7 +271,7 @@ describe("getAccountTree", () => {
       const result = getAccountTree(accounts, groups);
 
       const mainGroup = result[0] as AccountGroupNode;
-      const groupNames = mainGroup.children!.map((c) => (c as any).data.name);
+      const groupNames = mainGroup.children?.map((c) => c.data.name);
       expect(groupNames).toEqual(["Alpha Group", "Beta Group", "Zebra Group"]);
     });
 

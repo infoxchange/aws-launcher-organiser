@@ -281,11 +281,6 @@
   .add-root-group-button {
     margin-left: 0;
   }
-
-  .add-child-group-button {
-    margin-left: 0;
-    margin-top: 8px;
-  }
 }
 
 @media (prefers-color-scheme: dark) {

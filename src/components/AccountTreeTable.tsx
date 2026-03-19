@@ -576,16 +576,33 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
     return nodes.map((node) => {
       if ("children" in node) {
         const groupNode = node as AccountGroupNode;
+        const originalChildren = groupNode.children || [];
+
+        // Separate existing children into groups, accounts, and any existing buttons
+        const nestedGroups = originalChildren.filter((child) => "children" in child);
+        const accountNodes = originalChildren.filter((child) => "id" in child.data);
+        const existingButtons = originalChildren.filter(
+          // biome-ignore lint/suspicious/noExplicitAny: Button nodes have dynamic data structure
+          (child) => "isAddButton" in child.data && (child.data as any).isAddButton
+        );
+
+        // Create the new button node
+        const newButton = {
+          key: `add-button-${groupNode.key}`,
+          data: {
+            isAddButton: true,
+            parentGroupKey: groupNode.key,
+          },
+        } as unknown as AccountNode;
+
+        // Combine: groups, buttons (existing + new), accounts
         const childrenWithButton: (AccountGroupNode | AccountNode)[] = [
-          ...(groupNode.children || []),
-          {
-            key: `add-button-${groupNode.key}`,
-            data: {
-              isAddButton: true,
-              parentGroupKey: groupNode.key,
-            },
-          } as unknown as AccountNode,
+          ...nestedGroups,
+          ...existingButtons,
+          newButton,
+          ...accountNodes,
         ];
+
         return {
           ...groupNode,
           children: injectButtonNodes(childrenWithButton),
@@ -607,7 +624,7 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
     }
 
     // Apply sorting based on sortBy configuration
-    filtered = sortAccountsByConfig(filtered, sortBy, tags);
+    filtered = sortAccountsByConfig(filtered, sortBy, tags, groups);
 
     // Inject "add group" button nodes
     filtered = injectButtonNodes(filtered) as AccountGroupNode[];

@@ -1,8 +1,15 @@
 import { describe, expect, it } from "vitest";
+
 import type { AccountGroupNode } from "./account-extractor";
 import type { SortConfig } from "./config-schema";
 import { sortAccountsByConfig } from "./sortAccounts";
-import { createAccountNode, createGroupNode, createTagConfig } from "./test-helpers";
+import {
+  createAccountNode,
+  createGroupNode,
+  createTagConfig,
+  getNodeId,
+  type TestNode,
+} from "./test-helpers";
 
 describe("sortAccountsByConfig", () => {
   describe("no sorting config", () => {
@@ -21,7 +28,7 @@ describe("sortAccountsByConfig", () => {
       const account2 = createAccountNode("456", "Account A");
       const group = createGroupNode("group-1", "Test Group", [account1, account2]);
 
-      const result = sortAccountsByConfig([group], undefined as any, []);
+      const result = sortAccountsByConfig([group], undefined, []);
 
       expect(result[0].children).toEqual([account1, account2]);
     });
@@ -51,12 +58,12 @@ describe("sortAccountsByConfig", () => {
       const sortConfig: SortConfig[] = [{ type: "tags", direction: "asc" }];
 
       const result = sortAccountsByConfig([group], sortConfig, tags);
-      const sortedChildren = result[0].children as any[];
+      const sortedChildren: TestNode[] = result[0].children ?? [];
 
-      expect(sortedChildren[0].data.id).toBe("222"); // dev
-      expect(sortedChildren[1].data.id).toBe("333"); // test
-      expect(sortedChildren[2].data.id).toBe("444"); // uat
-      expect(sortedChildren[3].data.id).toBe("111"); // prod
+      expect(getNodeId(sortedChildren[0])).toBe("222"); // dev
+      expect(getNodeId(sortedChildren[1])).toBe("333"); // test
+      expect(getNodeId(sortedChildren[2])).toBe("444"); // uat
+      expect(getNodeId(sortedChildren[3])).toBe("111"); // prod
     });
 
     it("should sort accounts by tag order when account has multiple tags", () => {
@@ -74,13 +81,13 @@ describe("sortAccountsByConfig", () => {
       const sortConfig: SortConfig[] = [{ type: "tags", direction: "asc" }];
 
       const result = sortAccountsByConfig([group], sortConfig, tags);
-      const sortedChildren = result[0].children as any[];
+      const sortedChildren: TestNode[] = result[0].children ?? [];
 
       // account1 has tags [dev, uat] → first matching is dev (index 0)
       // account2 has tags [test] → first matching is test (index 1)
       // So account1 should come first
-      expect(sortedChildren[0].data.id).toBe("111");
-      expect(sortedChildren[1].data.id).toBe("222");
+      expect(getNodeId(sortedChildren[0])).toBe("111");
+      expect(getNodeId(sortedChildren[1])).toBe("222");
     });
 
     it("should place accounts without tags at the end (ascending)", () => {
@@ -97,10 +104,10 @@ describe("sortAccountsByConfig", () => {
       const sortConfig: SortConfig[] = [{ type: "tags", direction: "asc" }];
 
       const result = sortAccountsByConfig([group], sortConfig, tags);
-      const sortedChildren = result[0].children as any[];
+      const sortedChildren: TestNode[] = result[0].children ?? [];
 
-      expect(sortedChildren[0].data.id).toBe("111"); // with tag
-      expect(sortedChildren[1].data.id).toBe("222"); // without tag
+      expect(getNodeId(sortedChildren[0])).toBe("111"); // with tag
+      expect(getNodeId(sortedChildren[1])).toBe("222"); // without tag
     });
   });
 
@@ -128,12 +135,12 @@ describe("sortAccountsByConfig", () => {
       const sortConfig: SortConfig[] = [{ type: "tags", direction: "desc" }];
 
       const result = sortAccountsByConfig([group], sortConfig, tags);
-      const sortedChildren = result[0].children as any[];
+      const sortedChildren: TestNode[] = result[0].children ?? [];
 
-      expect(sortedChildren[0].data.id).toBe("444"); // prod (index 3)
-      expect(sortedChildren[1].data.id).toBe("333"); // uat (index 2)
-      expect(sortedChildren[2].data.id).toBe("222"); // test (index 1)
-      expect(sortedChildren[3].data.id).toBe("111"); // dev (index 0)
+      expect(getNodeId(sortedChildren[0])).toBe("444"); // prod (index 3)
+      expect(getNodeId(sortedChildren[1])).toBe("333"); // uat (index 2)
+      expect(getNodeId(sortedChildren[2])).toBe("222"); // test (index 1)
+      expect(getNodeId(sortedChildren[3])).toBe("111"); // dev (index 0)
     });
 
     it("should place accounts without tags at the end (descending)", () => {
@@ -150,11 +157,11 @@ describe("sortAccountsByConfig", () => {
       const sortConfig: SortConfig[] = [{ type: "tags", direction: "desc" }];
 
       const result = sortAccountsByConfig([group], sortConfig, tags);
-      const sortedChildren = result[0].children as any[];
+      const sortedChildren: TestNode[] = result[0].children ?? [];
 
       // With tag should come first, without tag at end (accounts without tags get MAX_VALUE)
-      expect(sortedChildren[0].data.id).toBe("111"); // with tag (test at index 1)
-      expect(sortedChildren[1].data.id).toBe("222"); // without tag
+      expect(getNodeId(sortedChildren[0])).toBe("111"); // with tag (test at index 1)
+      expect(getNodeId(sortedChildren[1])).toBe("222"); // without tag
     });
   });
 
@@ -171,11 +178,11 @@ describe("sortAccountsByConfig", () => {
       ];
 
       const result = sortAccountsByConfig([group], sortConfig, []);
-      const sortedChildren = result[0].children as any[];
+      const sortedChildren: TestNode[] = result[0].children ?? [];
 
-      expect(sortedChildren[0].data.id).toBe("222"); // dev
-      expect(sortedChildren[1].data.id).toBe("111"); // prod
-      expect(sortedChildren[2].data.id).toBe("333"); // test
+      expect(getNodeId(sortedChildren[0])).toBe("222"); // dev
+      expect(getNodeId(sortedChildren[1])).toBe("111"); // prod
+      expect(getNodeId(sortedChildren[2])).toBe("333"); // test
     });
 
     it("should sort by full match when no capture group", () => {
@@ -190,12 +197,12 @@ describe("sortAccountsByConfig", () => {
       ];
 
       const result = sortAccountsByConfig([group], sortConfig, []);
-      const sortedChildren = result[0].children as any[];
+      const sortedChildren: TestNode[] = result[0].children ?? [];
 
       // Sorted by locale comparison of "account-xyz", "account-abc", "account-mno"
-      expect(sortedChildren[0].data.id).toBe("222"); // account-abc
-      expect(sortedChildren[1].data.id).toBe("333"); // account-mno
-      expect(sortedChildren[2].data.id).toBe("111"); // account-xyz
+      expect(getNodeId(sortedChildren[0])).toBe("222"); // account-abc
+      expect(getNodeId(sortedChildren[1])).toBe("333"); // account-mno
+      expect(getNodeId(sortedChildren[2])).toBe("111"); // account-xyz
     });
 
     it("should place accounts without match at the end (ascending)", () => {
@@ -209,10 +216,10 @@ describe("sortAccountsByConfig", () => {
       ];
 
       const result = sortAccountsByConfig([group], sortConfig, []);
-      const sortedChildren = result[0].children as any[];
+      const sortedChildren: TestNode[] = result[0].children ?? [];
 
-      expect(sortedChildren[0].data.id).toBe("111"); // matches pattern
-      expect(sortedChildren[1].data.id).toBe("222"); // no match
+      expect(getNodeId(sortedChildren[0])).toBe("111"); // matches pattern
+      expect(getNodeId(sortedChildren[1])).toBe("222"); // no match
     });
   });
 
@@ -229,11 +236,11 @@ describe("sortAccountsByConfig", () => {
       ];
 
       const result = sortAccountsByConfig([group], sortConfig, []);
-      const sortedChildren = result[0].children as any[];
+      const sortedChildren: TestNode[] = result[0].children ?? [];
 
-      expect(sortedChildren[0].data.id).toBe("333"); // test
-      expect(sortedChildren[1].data.id).toBe("111"); // prod
-      expect(sortedChildren[2].data.id).toBe("222"); // dev
+      expect(getNodeId(sortedChildren[0])).toBe("333"); // test
+      expect(getNodeId(sortedChildren[1])).toBe("111"); // prod
+      expect(getNodeId(sortedChildren[2])).toBe("222"); // dev
     });
   });
 
@@ -269,14 +276,14 @@ describe("sortAccountsByConfig", () => {
       ];
 
       const result = sortAccountsByConfig([group], sortConfig, tags);
-      const sortedChildren = result[0].children as any[];
+      const sortedChildren: TestNode[] = result[0].children ?? [];
 
       // All dev accounts should come before test accounts
       // Within each tag group, should be sorted by name
-      expect(sortedChildren[0].data.id).toBe("222"); // Apple with dev
-      expect(sortedChildren[1].data.id).toBe("111"); // Zebra with dev
-      expect(sortedChildren[2].data.id).toBe("444"); // Banana with test
-      expect(sortedChildren[3].data.id).toBe("333"); // Yak with test
+      expect(getNodeId(sortedChildren[0])).toBe("222"); // Apple with dev
+      expect(getNodeId(sortedChildren[1])).toBe("111"); // Zebra with dev
+      expect(getNodeId(sortedChildren[2])).toBe("444"); // Banana with test
+      expect(getNodeId(sortedChildren[3])).toBe("333"); // Yak with test
     });
   });
 
@@ -300,16 +307,16 @@ describe("sortAccountsByConfig", () => {
 
       const result = sortAccountsByConfig([group1, group2], sortConfig, tags);
 
-      const sortedGroup1 = result[0].children as any[];
-      const sortedGroup2 = result[1].children as any[];
+      const sortedGroup1: TestNode[] = result[0].children ?? [];
+      const sortedGroup2: TestNode[] = result[1].children ?? [];
 
       // Group 1: dev should come before prod
-      expect(sortedGroup1[0].data.id).toBe("222"); // dev
-      expect(sortedGroup1[1].data.id).toBe("111"); // prod
+      expect(getNodeId(sortedGroup1[0])).toBe("222"); // dev
+      expect(getNodeId(sortedGroup1[1])).toBe("111"); // prod
 
       // Group 2: dev should come before prod
-      expect(sortedGroup2[0].data.id).toBe("444"); // dev
-      expect(sortedGroup2[1].data.id).toBe("333"); // prod
+      expect(getNodeId(sortedGroup2[0])).toBe("444"); // dev
+      expect(getNodeId(sortedGroup2[1])).toBe("333"); // prod
     });
   });
 
@@ -380,12 +387,13 @@ describe("sortAccountsByConfig", () => {
       const result = sortAccountsByConfig([mainGroup], sortConfig, tags);
 
       // Main group still contains the nested group
-      expect(result[0].children).toHaveLength(1);
+      const resultContents: TestNode[] = result[0].children ?? [];
+      expect(resultContents).toHaveLength(1);
       // Nested group should be sorted internally
-      const sortedNestedGroup = result[0].children![0] as AccountGroupNode;
-      const sortedAccounts = sortedNestedGroup.children;
-      expect((sortedAccounts![0].data as any).id).toBe("222"); // dev
-      expect((sortedAccounts![1].data as any).id).toBe("111"); // prod
+      const sortedNestedGroup = resultContents[0] as AccountGroupNode;
+      const sortedAccounts: TestNode[] = sortedNestedGroup.children ?? [];
+      expect(getNodeId(sortedAccounts[0])).toBe("222"); // dev
+      expect(getNodeId(sortedAccounts[1])).toBe("111"); // prod
     });
 
     it("should sort accounts in multiple levels of nesting", () => {
@@ -412,20 +420,20 @@ describe("sortAccountsByConfig", () => {
       const result = sortAccountsByConfig([midGroup], sortConfig, tags);
 
       // Check mid-level accounts are sorted
-      const resultChildren = result[0].children!;
+      const resultChildren = result[0].children ?? [];
       const accountsInMid = resultChildren.filter((child) => "id" in child.data);
       const groupsInMid = resultChildren.filter((child) => !("id" in child.data));
 
       // Dev accounts should come before prod
-      expect((accountsInMid[0].data as any).id).toBe("444"); // mid dev
-      expect((accountsInMid[1].data as any).id).toBe("333"); // mid prod
+      expect(getNodeId(accountsInMid[0])).toBe("444"); // mid dev
+      expect(getNodeId(accountsInMid[1])).toBe("333"); // mid prod
 
       // Deep group should still be there
       expect(groupsInMid).toHaveLength(1);
       const deepGroupResult = groupsInMid[0] as AccountGroupNode;
-      const deepGroupAccounts = deepGroupResult.children;
-      expect((deepGroupAccounts![0].data as any).id).toBe("222"); // deep dev
-      expect((deepGroupAccounts![1].data as any).id).toBe("111"); // deep prod
+      const deepGroupAccounts: TestNode[] = deepGroupResult.children ?? [];
+      expect(getNodeId(deepGroupAccounts[0])).toBe("222"); // deep dev
+      expect(getNodeId(deepGroupAccounts[1])).toBe("111"); // deep prod
     });
 
     it("should sort multiple nested groups independently", () => {
@@ -458,19 +466,19 @@ describe("sortAccountsByConfig", () => {
       const sortConfig: SortConfig[] = [{ type: "tags", direction: "asc" }];
 
       const result = sortAccountsByConfig([mainGroup], sortConfig, tags);
-      const resultChildren = result[0].children!;
+      const resultChildren = result[0].children ?? [];
 
       // Check first nested group is sorted
       const sorted1 = resultChildren[0] as AccountGroupNode;
-      const accounts1 = sorted1.children;
-      expect((accounts1![0].data as any).id).toBe("222"); // dev
-      expect((accounts1![1].data as any).id).toBe("111"); // prod
+      const accounts1: TestNode[] = sorted1.children ?? [];
+      expect(getNodeId(accounts1[0])).toBe("222"); // dev
+      expect(getNodeId(accounts1[1])).toBe("111"); // prod
 
       // Check second nested group is sorted
       const sorted2 = resultChildren[1] as AccountGroupNode;
-      const accounts2 = sorted2.children;
-      expect((accounts2![0].data as any).id).toBe("444"); // dev
-      expect((accounts2![1].data as any).id).toBe("333"); // prod
+      const accounts2: TestNode[] = sorted2.children ?? [];
+      expect(getNodeId(accounts2[0])).toBe("444"); // dev
+      expect(getNodeId(accounts2[1])).toBe("333"); // prod
     });
   });
 });
