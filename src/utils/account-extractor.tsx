@@ -1,6 +1,6 @@
 import type { TreeNode } from "primereact/treenode";
 import { IconType } from "primereact/utils";
-import { type PredefinedGroup } from "./groupsStore";
+import { type PredefinedGroup } from "./configStore";
 
 export const environments = ["dev", "test", "uat", "prod"] as const;
 

@@ -16,8 +16,8 @@
     "allowImportingTsExtensions": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "types": ["node"]
+    "types": ["node", "chrome"]
   },
-  "include": ["src"],
+  "include": ["src", "entrypoints"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

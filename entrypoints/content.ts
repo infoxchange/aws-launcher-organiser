@@ -2,12 +2,20 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { defineContentScript } from "wxt/utils/define-content-script";
 import { AccountTreeTable } from "../src/components/AccountTreeTable";
+import { useConfigStore, STORAGE_KEY } from "../src/utils/configStore";
 import "../src/styles/global.css";
 
 export default defineContentScript({
   matches: ["https://*.awsapps.com/start/"],
   main(_ctx) {
     console.log("AWS SSO Account Grouper content script loaded");
+
+    // Re-hydrate the Zustand store whenever the background script updates storage
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area === "local" && changes[STORAGE_KEY]) {
+        useConfigStore.persist.rehydrate();
+      }
+    });
 
     // Only inject on the SSO start page
     if (!window.location.pathname.includes("/start/")) {

@@ -18,7 +18,7 @@ import {
   getAccountRoles,
   groupAccountsByPattern,
 } from "../utils/account-extractor";
-import { useGroupsStore } from "../utils/groupsStore";
+import { useConfigStore } from "../utils/configStore";
 import { TreeNode } from "primereact/treenode";
 import { SettingsDialog } from "./SettingsDialog";
 
@@ -136,7 +136,7 @@ function loadRolesForExpandedGroups(
 }
 
 export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
-  const { groups, setGroups } = useGroupsStore();
+  const { groups, setGroups, autoUpdateEnabled } = useConfigStore();
   const [nodes, setNodes] = useState<AccountGroupNode[]>([]);
   const [expandedKeys, setExpandedKeys] = useState<Record<string, boolean>>({});
   const [selectedEnvs, setSelectedEnvs] = useState<Set<Environment>>(new Set());
@@ -469,14 +469,16 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
           </ButtonGroup>
         </div>
         <div className="group">
-          <Button
-            icon="pi pi-pencil"
-            label={editMode ? "Stop Editing" : undefined}
-            rounded
-            text
-            onClick={() => setEditMode(!editMode)}
-            className={`edit-button ${editMode ? "edit-button-active" : ""}`}
-          />
+          {!autoUpdateEnabled && (
+            <Button
+              icon="pi pi-pencil"
+              label={editMode ? "Stop Editing" : undefined}
+              rounded
+              text
+              onClick={() => setEditMode(!editMode)}
+              className={`edit-button ${editMode ? "edit-button-active" : ""}`}
+            />
+          )}
           <Button
             icon="pi pi-cog"
             rounded
