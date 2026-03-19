@@ -308,35 +308,39 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
 
     return (
       <div className={`group-content ${editMode ? "group-content-editable" : ""}`}>
-        <button
-          className="group-name"
-          onClick={(e) => {
-            if (editMode) {
+        {editMode ? (
+          <button
+            className="group-name"
+            onClick={(e) => {
               e.stopPropagation();
               setEditingGroupKey(groupKey);
               setEditingGroupName(data?.name || "");
-            }
-          }}
-          disabled={!editMode}
-          type="button"
-        >
-          {data?.name} ({countAllAccounts((node as AccountGroupNode).children ?? [])})
-        </button>
+            }}
+            type="button"
+          >
+            {data?.name} ({countAllAccounts((node as AccountGroupNode).children ?? [])})
+          </button>
+        ) : (
+          <div className="group-name">
+            {data?.name} ({countAllAccounts((node as AccountGroupNode).children ?? [])})
+          </div>
+        )}
         {groupData?.description ? (
-          <button
-            className="group-description"
-            onClick={(e) => {
-              if (editMode) {
+          editMode ? (
+            <button
+              className="group-description"
+              onClick={(e) => {
                 e.stopPropagation();
                 setEditingDescriptionKey(groupKey);
                 setEditingDescription(groupData.description || "");
-              }
-            }}
-            disabled={!editMode}
-            type="button"
-          >
-            {groupData.description}
-          </button>
+              }}
+              type="button"
+            >
+              {groupData.description}
+            </button>
+          ) : (
+            <div className="group-description">{groupData.description}</div>
+          )
         ) : editMode ? (
           <Button
             size="small"

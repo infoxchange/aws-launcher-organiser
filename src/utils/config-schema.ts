@@ -23,7 +23,7 @@ export const PredefinedGroupSchema: z.ZodType<PredefinedGroup> = z.lazy(() =>
 );
 
 export const RemoteConfigSchema = z.object({
-  ["$schema"]: z.string().optional(),
+  $schema: z.string().optional(),
   version: z.number(),
   groups: z.array(PredefinedGroupSchema),
 });

@@ -1,3 +1,4 @@
 #aws-account-tree-table ~ * {
-  display: none;
+  /* biome-ignore lint: Required to override AWS launcher styling */
+  display: none !important;
 }
