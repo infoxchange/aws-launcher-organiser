@@ -37,6 +37,20 @@
     font-size: 1.3em;
   }
 
+  .group-name,
+  .group-description {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-family: inherit;
+    text-align: left;
+
+    &:disabled {
+      cursor: default;
+    }
+  }
+
   .filter-controls {
     display: flex;
     align-items: center;
@@ -275,15 +289,6 @@
       }
     }
 
-    .group-content-editable {
-      .group-name,
-      .group-description {
-        &:hover {
-          background-color: rgba(59, 130, 246, 0.2);
-        }
-      }
-    }
-
     .group-description-input {
       border-color: #60a5fa;
 
@@ -291,5 +296,10 @@
         box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.3);
       }
     }
+  }
+
+  .group-content-editable .group-name:hover,
+  .group-content-editable .group-description:hover {
+    background-color: rgba(59, 130, 246, 0.2);
   }
 }

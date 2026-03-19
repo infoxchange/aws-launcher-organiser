@@ -1,6 +1,6 @@
 import type { TreeNode } from "primereact/treenode";
-import { IconType } from "primereact/utils";
-import { type PredefinedGroup } from "./configStore";
+import type { IconType } from "primereact/utils";
+import type { PredefinedGroup } from "./configStore";
 
 export const environments = ["dev", "test", "uat", "prod"] as const;
 
@@ -107,14 +107,17 @@ export async function getAccountRoles(accountId: string): Promise<AccountRole[]>
     throw new Error(`Account button not found for id: ${accountId}`);
   }
 
-  if (accountButton.getAttribute("aria-expanded") !== "true") {
-    accountButton.click();
-    await waitForElement(accountButton.parentElement!, 'a[data-testid="federation-link"]');
+  const parentElement = accountButton.parentElement;
+  if (!parentElement) {
+    throw new Error(`Account button has no parent element for id: ${accountId}`);
   }
 
-  const container = accountButton.parentElement!.querySelector(
-    'div[data-testid="role-list-container"]'
-  );
+  if (accountButton.getAttribute("aria-expanded") !== "true") {
+    accountButton.click();
+    await waitForElement(parentElement, 'a[data-testid="federation-link"]');
+  }
+
+  const container = parentElement.querySelector('div[data-testid="role-list-container"]');
   if (!container) return [];
 
   return Array.from(
@@ -241,7 +244,7 @@ export function groupAccountsByPattern(
         const renderIconSrc = (src: string) => {
           const iconFunction: IconType<AccountGroupNode> = (options) => {
             const { ref, iconProps } = options;
-            return <img src={src} {...iconProps} ref={ref} />;
+            return <img src={src} {...iconProps} ref={ref} alt="" aria-hidden="true" />;
           };
           return iconFunction;
         };

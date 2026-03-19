@@ -2,7 +2,7 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { defineContentScript } from "wxt/utils/define-content-script";
 import { AccountTreeTable } from "../src/components/AccountTreeTable";
-import { useConfigStore, STORAGE_KEY } from "../src/utils/configStore";
+import { STORAGE_KEY, useConfigStore } from "../src/utils/configStore";
 import "../src/styles/global.css";
 
 export default defineContentScript({

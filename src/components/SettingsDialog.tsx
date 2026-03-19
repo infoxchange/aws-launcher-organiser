@@ -46,7 +46,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
     setTestMessage(null);
     try {
       const headers: Record<string, string> = {};
-      if (autoUpdateAuthToken) headers["Authorization"] = `Bearer ${autoUpdateAuthToken}`;
+      if (autoUpdateAuthToken) headers.Authorization = `Bearer ${autoUpdateAuthToken}`;
       const response = await fetch(autoUpdateUrl, { headers });
       if (!response.ok) {
         setTestStatus("error");
@@ -64,11 +64,15 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
       const result = RemoteConfigSchema.safeParse(json);
       if (!result.success) {
         setTestStatus("error");
-        setTestMessage(`Schema validation failed: ${result.error.issues.map((i) => `${i.path.join(".") || "root"}: ${i.message}`).join("; ")}`);
+        setTestMessage(
+          `Schema validation failed: ${result.error.issues.map((i) => `${i.path.join(".") || "root"}: ${i.message}`).join("; ")}`
+        );
         return;
       }
       setTestStatus("success");
-      setTestMessage(`Config updated — ${result.data.groups.length} top-level group(s), version ${result.data.version}.`);
+      setTestMessage(
+        `Config updated — ${result.data.groups.length} top-level group(s), version ${result.data.version}.`
+      );
       setGroups(result.data.groups);
       onConfigChange(JSON.stringify(result.data.groups, null, 2));
     } catch (err) {
@@ -78,16 +82,9 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   };
 
   return (
-    <Dialog
-      header="Settings"
-      visible={visible}
-      onHide={onHide}
-      modal
-      style={{ width: "50vw" }}
-    >
+    <Dialog header="Settings" visible={visible} onHide={onHide} modal style={{ width: "50vw" }}>
       <div className="settings-dialog">
         <div className="settings-content">
-
           <section className="auto-update-section">
             <h4 className="section-heading">Auto Update</h4>
             <div className="auto-update-toggle-row">
@@ -129,7 +126,13 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                   </div>
                   {testStatus !== "idle" && (
                     <Message
-                      severity={testStatus === "success" ? "success" : testStatus === "error" ? "error" : "info"}
+                      severity={
+                        testStatus === "success"
+                          ? "success"
+                          : testStatus === "error"
+                            ? "error"
+                            : "info"
+                      }
                       text={testMessage ?? ""}
                       className="test-result-message"
                     />

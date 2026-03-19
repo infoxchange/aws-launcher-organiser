@@ -1,25 +1,25 @@
-import { Tree } from "primereact/tree";
 import { Button } from "primereact/button";
 import { ButtonGroup } from "primereact/buttongroup";
+import { Tree } from "primereact/tree";
 import type React from "react";
 import { useEffect, useState } from "react";
 import "primereact/resources/themes/lara-light-blue/theme.css";
 import "primereact/resources/primereact.css";
 import "primeicons/primeicons.css";
 import "./AccountTreeTable.css";
+import type { TreeNode } from "primereact/treenode";
 import {
   type Account,
   type AccountGroupNode,
   type AccountNode,
   type AccountRole,
-  environments,
   type Environment,
+  environments,
   extractAccounts,
   getAccountRoles,
   groupAccountsByPattern,
 } from "../utils/account-extractor";
 import { useConfigStore } from "../utils/configStore";
-import { TreeNode } from "primereact/treenode";
 import { SettingsDialog } from "./SettingsDialog";
 
 export interface AccountTreeTableProps {
@@ -89,8 +89,11 @@ function countAllAccounts(nodes: (AccountGroupNode | AccountNode)[]): number {
   for (const node of nodes) {
     if ("id" in node.data) {
       count++;
-    } else if ((node as AccountGroupNode).children) {
-      count += countAllAccounts((node as AccountGroupNode).children!);
+    } else {
+      const groupNode = node as AccountGroupNode;
+      if (groupNode.children) {
+        count += countAllAccounts(groupNode.children);
+      }
     }
   }
   return count;
@@ -183,9 +186,7 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
               {(account.environment || account.name.endsWith("-sandbox")) && (
                 <span
                   className={`environment-dot ${
-                    account.name.endsWith("-sandbox")
-                      ? "sandbox"
-                      : account.environment || "unknown"
+                    account.name.endsWith("-sandbox") ? "sandbox" : account.environment || "unknown"
                   }`}
                 />
               )}
@@ -222,9 +223,7 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
               />
             )}
           </div>
-          {account.description && (
-            <div className="account-description">{account.description}</div>
-          )}
+          {account.description && <div className="account-description">{account.description}</div>}
         </div>
       );
     }
@@ -236,13 +235,14 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
 
     if (isEditingName) {
       return (
+        // biome-ignore lint/a11y/useKeyWithClickEvents: Container div only stops event propagation
+        // biome-ignore lint/a11y/noStaticElementInteractions: Container div only stops event propagation
         <div className="group-edit-container" onClick={(e) => e.stopPropagation()}>
           <input
             type="text"
             value={editingGroupName}
             onChange={(e) => setEditingGroupName(e.target.value)}
             className="group-edit-input"
-            autoFocus
             onClick={(e) => e.stopPropagation()}
             onKeyDown={(e) => {
               e.stopPropagation();
@@ -264,7 +264,11 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
 
     if (isEditingDesc) {
       return (
+        // biome-ignore lint/a11y/useKeyWithClickEvents: Container div only stops event propagation
+        // biome-ignore lint/a11y/noStaticElementInteractions: Container div only stops event propagation
         <div className="group-edit-container" onClick={(e) => e.stopPropagation()}>
+          {/* biome-ignore lint/a11y/useKeyWithClickEvents: Editing mode */}
+          {/* biome-ignore lint/a11y/noStaticElementInteractions: Editing mode */}
           <span
             className="group-name"
             onClick={(e) => {
@@ -281,7 +285,6 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
             value={editingDescription}
             onChange={(e) => setEditingDescription(e.target.value)}
             className="group-description-input"
-            autoFocus
             onClick={(e) => e.stopPropagation()}
             onKeyDown={(e) => {
               e.stopPropagation();
@@ -305,7 +308,7 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
 
     return (
       <div className={`group-content ${editMode ? "group-content-editable" : ""}`}>
-        <span
+        <button
           className="group-name"
           onClick={(e) => {
             if (editMode) {
@@ -314,11 +317,13 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
               setEditingGroupName(data?.name || "");
             }
           }}
+          disabled={!editMode}
+          type="button"
         >
           {data?.name} ({countAllAccounts((node as AccountGroupNode).children ?? [])})
-        </span>
+        </button>
         {groupData?.description ? (
-          <span
+          <button
             className="group-description"
             onClick={(e) => {
               if (editMode) {
@@ -327,9 +332,11 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
                 setEditingDescription(groupData.description || "");
               }
             }}
+            disabled={!editMode}
+            type="button"
           >
             {groupData.description}
-          </span>
+          </button>
         ) : editMode ? (
           <Button
             size="small"
@@ -393,8 +400,8 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
     setGroups(updated);
   };
 
-  const findGroupByKey = (actualGroupKey: string): typeof groups[0] | null => {
-    const search = (groupsToSearch: typeof groups): typeof groups[0] | null => {
+  const findGroupByKey = (actualGroupKey: string): (typeof groups)[0] | null => {
+    const search = (groupsToSearch: typeof groups): (typeof groups)[0] | null => {
       for (const group of groupsToSearch) {
         if (group.key === actualGroupKey) {
           return group;

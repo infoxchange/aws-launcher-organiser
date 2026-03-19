@@ -10,7 +10,11 @@ interface PersistedState {
   autoUpdateAuthToken: string;
 }
 
-async function readState(): Promise<{ raw: string; state: PersistedState; version: number } | null> {
+async function readState(): Promise<{
+  raw: string;
+  state: PersistedState;
+  version: number;
+} | null> {
   const result = await chrome.storage.local.get(STORAGE_KEY);
   const raw = result[STORAGE_KEY] as string | undefined;
   if (!raw) return null;
@@ -31,7 +35,7 @@ async function checkForConfigUpdates() {
 
   const headers: Record<string, string> = {};
   if (state.autoUpdateAuthToken) {
-    headers["Authorization"] = `Bearer ${state.autoUpdateAuthToken}`;
+    headers.Authorization = `Bearer ${state.autoUpdateAuthToken}`;
   }
 
   let json: unknown;
@@ -68,7 +72,7 @@ export default defineBackground({
     chrome.alarms.get(ALARM_NAME, (alarm) => {
       if (!alarm) {
         chrome.alarms.create(ALARM_NAME, {
-          delayInMinutes: 60,       // first run in 1 hour
+          delayInMinutes: 60, // first run in 1 hour
           periodInMinutes: 24 * 60, // then every 24 hours
         });
       }

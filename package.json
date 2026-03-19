@@ -14,8 +14,10 @@
     "zip:firefox": "wxt zip --browser firefox",
     "zip:chrome": "wxt zip --browser chrome",
     "lint": "biome check --verbose",
-    "lint:fix": "biome check --apply",
-    "format": "biome format --write"
+    "lint:fix": "biome check --write",
+    "format": "biome format --write",
+    "generate-schema": "tsx scripts/generate-schema.ts",
+    "lint-staged": "lint-staged"
   },
   "dependencies": {
     "primeicons": "^7.0.0",
@@ -31,8 +33,22 @@
     "@types/node": "^25.5.0",
     "@types/react": "^19.2.3",
     "@types/react-dom": "^19.2.3",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "wxt": "^0.20.19"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx}": [
+      "biome check --write"
+    ],
+    "*.{json,md}": [
+      "biome format --write"
+    ],
+    "*": [
+      "npm run generate-schema -- && git add config-schema.json || true"
+    ]
   },
   "private": true
 }
