@@ -12,10 +12,7 @@
       }
     }
   },
-  "required": [
-    "version",
-    "groups"
-  ],
+  "required": ["version", "groups"],
   "additionalProperties": false,
   "$defs": {
     "__schema0": {
@@ -56,10 +53,7 @@
           "type": "string"
         }
       },
-      "required": [
-        "key",
-        "name"
-      ],
+      "required": ["key", "name"],
       "additionalProperties": false
     }
   }
