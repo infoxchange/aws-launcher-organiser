@@ -86,6 +86,40 @@ function waitForElement(parent: Element, selector: string, timeout = 5000): Prom
   });
 }
 
+/**
+ * Wait for any of multiple elements to appear in the DOM
+ */
+function waitForAnyElement(parent: Element, selectors: string[], timeout = 5000): Promise<Element> {
+  return new Promise((resolve, reject) => {
+    // Check if any element already exists
+    for (const selector of selectors) {
+      const existing = parent.querySelector(selector);
+      if (existing) {
+        resolve(existing);
+        return;
+      }
+    }
+
+    const observer = new MutationObserver(() => {
+      for (const selector of selectors) {
+        const el = parent.querySelector(selector);
+        if (el) {
+          observer.disconnect();
+          resolve(el);
+          return;
+        }
+      }
+    });
+
+    observer.observe(parent, { childList: true, subtree: true });
+
+    setTimeout(() => {
+      observer.disconnect();
+      reject(new Error(`Timeout waiting for any of: ${selectors.join(", ")}`));
+    }, timeout);
+  });
+}
+
 export async function getAccountRoles(accountId: string): Promise<AccountRole[]> {
   const buttons = document.querySelectorAll<HTMLButtonElement>(
     'button[data-testid="account-list-cell"]'
@@ -110,18 +144,92 @@ export async function getAccountRoles(accountId: string): Promise<AccountRole[]>
 
   if (accountButton.getAttribute("aria-expanded") !== "true") {
     accountButton.click();
-    await waitForElement(parentElement, 'a[data-testid="federation-link"]');
   }
 
-  const container = parentElement.querySelector('div[data-testid="role-list-container"]');
-  if (!container) return [];
+  // Try up to 3 times to load roles, retrying on error
+  const MAX_RETRIES = 3;
 
-  return Array.from(
-    container.querySelectorAll<HTMLAnchorElement>('a[data-testid="federation-link"]')
-  ).map((link) => ({
-    name: link.textContent?.trim() ?? "",
-    consoleUrl: link.href,
-  }));
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      // Wait for either federation link or error alert to appear
+      await waitForAnyElement(
+        parentElement,
+        ['a[data-testid="federation-link"]', 'div[data-testid="error-component-alert"]'],
+        5000
+      );
+
+      // Check if federation link appeared
+      const federationLink = parentElement.querySelector('a[data-testid="federation-link"]');
+      if (federationLink) {
+        // Got the roles
+        const container = parentElement.querySelector('div[data-testid="role-list-container"]');
+        if (container) {
+          return Array.from(
+            container.querySelectorAll<HTMLAnchorElement>('a[data-testid="federation-link"]')
+          ).map((link) => ({
+            name: link.textContent?.trim() ?? "",
+            consoleUrl: link.href,
+          }));
+        }
+      }
+
+      // Check if error alert appeared
+      const errorAlert = parentElement.querySelector('div[data-testid="error-component-alert"]');
+      if (errorAlert && attempt < MAX_RETRIES - 1) {
+        const retryButton = errorAlert.querySelector('button[data-testid="retry-button"]');
+        if (retryButton) {
+          const errorMessage =
+            errorAlert.querySelector(".awsui_content_mx3cw_1ehno_391")?.textContent || "";
+          // Wait times: 2s, 5s, 10s (longer for rate limiting)
+          const isRateLimited = errorMessage.includes("HTTP 429");
+          const waitTimes = [2000, 5000, 10000];
+          const waitTime = isRateLimited ? waitTimes[attempt] : waitTimes[attempt];
+          console.log(`[getAccountRoles] Error detected for account ${accountId}: ${errorMessage}`);
+          console.log(
+            `[getAccountRoles] Retrying in ${waitTime}ms (attempt ${attempt + 1}/${MAX_RETRIES - 1})...`
+          );
+          (retryButton as HTMLButtonElement).click();
+          await new Promise((resolve) => setTimeout(resolve, waitTime));
+          continue;
+        }
+      }
+
+      // If we got here, federation link didn't appear but error alert did
+      if (errorAlert) {
+        if (attempt === MAX_RETRIES - 1) {
+          const errorMessage =
+            errorAlert.querySelector(".awsui_content_mx3cw_1ehno_391")?.textContent ||
+            "Unknown error";
+          throw new Error(
+            `Failed to load roles for account ${accountId} after ${MAX_RETRIES} attempts: ${errorMessage}`
+          );
+        }
+      } else {
+        // Neither link nor error appeared before timeout - shouldn't happen with waitForAnyElement
+        throw new Error(
+          `Failed to load roles for account ${accountId}: no federation link or error alert appeared`
+        );
+      }
+    } catch (error) {
+      // Only re-throw if this was the last attempt or an unexpected error
+      if (attempt === MAX_RETRIES - 1) {
+        if (error instanceof Error && error.message.includes("Failed to load roles")) {
+          throw error;
+        }
+        const errorAlert = parentElement.querySelector('div[data-testid="error-component-alert"]');
+        const errorMessage = errorAlert
+          ? errorAlert.querySelector(".awsui_content_mx3cw_1ehno_391")?.textContent ||
+            "Unknown error"
+          : "Timeout waiting for roles";
+        throw new Error(
+          `Failed to load roles for account ${accountId} after ${MAX_RETRIES} attempts: ${errorMessage}`
+        );
+      }
+    }
+  }
+
+  // Shouldn't reach here
+  throw new Error(`Failed to load roles for account ${accountId} after ${MAX_RETRIES} attempts`);
 }
 
 /**

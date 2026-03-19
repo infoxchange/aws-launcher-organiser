@@ -1,8 +1,9 @@
 import { Button } from "primereact/button";
 import { ButtonGroup } from "primereact/buttongroup";
+import { Message } from "primereact/message";
 import { Tree } from "primereact/tree";
 import type React from "react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import "primereact/resources/themes/lara-light-blue/theme.css";
 import "primereact/resources/primereact.css";
 import "primeicons/primeicons.css";
@@ -17,9 +18,258 @@ import {
   getAccountRoles,
   getAccountTree,
 } from "../utils/account-extractor";
-import { useConfigStore } from "../utils/configStore";
+import { type Group, type TagConfig, useConfigStore } from "../utils/configStore";
 import { sortAccountsByConfig } from "../utils/sortAccounts";
 import { SettingsDialog } from "./SettingsDialog";
+
+interface NodeTemplateProps {
+  node: TreeNode;
+  tags: TagConfig[];
+  editMode: boolean;
+  editingGroupKey: string | null;
+  editingGroupName: string;
+  setEditingGroupKey: (key: string | null) => void;
+  setEditingGroupName: (name: string) => void;
+  editingDescriptionKey: string | null;
+  editingDescription: string;
+  setEditingDescriptionKey: (key: string | null) => void;
+  setEditingDescription: (desc: string) => void;
+  updateGroupName: (groupKey: string, name: string) => void;
+  updateGroupDescription: (groupKey: string, desc: string) => void;
+  findGroupByKey: (key: string) => Group | null;
+  setNodes: React.Dispatch<React.SetStateAction<AccountGroupNode[]>>;
+  enqueueRoleLoad: (accountId: string, execute: () => Promise<void>) => void;
+}
+
+const NodeTemplate: React.FC<NodeTemplateProps> = ({
+  node,
+  tags,
+  editMode,
+  editingGroupKey,
+  editingGroupName,
+  setEditingGroupKey,
+  setEditingGroupName,
+  editingDescriptionKey,
+  editingDescription,
+  setEditingDescriptionKey,
+  setEditingDescription,
+  updateGroupName,
+  updateGroupDescription,
+  findGroupByKey,
+  setNodes,
+  enqueueRoleLoad,
+}) => {
+  const [roleLoadError, setRoleLoadError] = useState<string | null>(null);
+  const data = node.data;
+  const account = "id" in data ? (data as Account) : null;
+
+  const loadRoles = async () => {
+    if (!account) return;
+    try {
+      const roles = await getAccountRoles(account.id);
+      setRoleLoadError(null);
+      setNodes((prev) => setAccountRoles(prev, account.id, roles));
+    } catch (error) {
+      setRoleLoadError((error as Error).message);
+    }
+  };
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally fires only on mount
+  useEffect(() => {
+    if (!account || account.roles) return;
+    enqueueRoleLoad(account.id, loadRoles);
+  }, []);
+
+  // Account node - has an id property
+  if (account) {
+    return (
+      <div className="account-node">
+        <div className="account-header">
+          <span className="account-name-group">
+            {account.tags && account.tags.length > 0 && (
+              <div className="tag-dots">
+                {account.tags.map((tagKey) => {
+                  const tagConfig = tags.find((t) => t.key === tagKey);
+                  return tagConfig ? (
+                    <span
+                      key={tagKey}
+                      className="tag-dot"
+                      style={{ backgroundColor: tagConfig.colour }}
+                      title={tagConfig.name}
+                    />
+                  ) : null;
+                })}
+              </div>
+            )}
+            <span className="account-name">{account.name}</span>
+          </span>
+          <span className="account-id">({account.id})</span>
+          {account.roles ? (
+            <div className="account-roles">
+              {account.roles.map((role) => (
+                <a
+                  key={role.name}
+                  href={role.consoleUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="account-role-link"
+                >
+                  {role.name}
+                </a>
+              ))}
+            </div>
+          ) : (
+            <div className="account-role-load">
+              {roleLoadError && (
+                <Message severity="error" text={roleLoadError} className="role-load-error" />
+              )}
+              <Button
+                size="small"
+                text
+                label={roleLoadError ? "Retry loading roles" : "Load roles"}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  loadRoles();
+                }}
+              />
+            </div>
+          )}
+        </div>
+        {account.description && <div className="account-description">{account.description}</div>}
+      </div>
+    );
+  }
+
+  // Group node - just name
+  const groupKey = node.key as string;
+  const isEditingName = editMode && editingGroupKey === groupKey;
+  const isEditingDesc = editMode && editingDescriptionKey === groupKey;
+
+  if (isEditingName) {
+    return (
+      // biome-ignore lint/a11y/useKeyWithClickEvents: Container div only stops event propagation
+      // biome-ignore lint/a11y/noStaticElementInteractions: Container div only stops event propagation
+      <div className="group-edit-container" onClick={(e) => e.stopPropagation()}>
+        <input
+          type="text"
+          value={editingGroupName}
+          onChange={(e) => setEditingGroupName(e.target.value)}
+          className="group-edit-input"
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            if (e.key === "Enter") {
+              updateGroupName(groupKey, editingGroupName);
+              setEditingGroupKey(null);
+            } else if (e.key === "Escape") {
+              setEditingGroupKey(null);
+            }
+          }}
+          onBlur={() => {
+            updateGroupName(groupKey, editingGroupName);
+            setEditingGroupKey(null);
+          }}
+        />
+      </div>
+    );
+  }
+
+  if (isEditingDesc) {
+    return (
+      // biome-ignore lint/a11y/useKeyWithClickEvents: Container div only stops event propagation
+      // biome-ignore lint/a11y/noStaticElementInteractions: Container div only stops event propagation
+      <div className="group-edit-container" onClick={(e) => e.stopPropagation()}>
+        {/* biome-ignore lint/a11y/useKeyWithClickEvents: Editing mode */}
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: Editing mode */}
+        <span
+          className="group-name"
+          onClick={(e) => {
+            if (editMode) {
+              e.stopPropagation();
+              setEditingGroupKey(groupKey);
+              setEditingGroupName(data?.name || "");
+            }
+          }}
+        >
+          {data?.name} ({countAllAccounts((node as AccountGroupNode).children ?? [])})
+        </span>
+        <textarea
+          value={editingDescription}
+          onChange={(e) => setEditingDescription(e.target.value)}
+          className="group-description-input"
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            if (e.key === "Escape") {
+              setEditingDescriptionKey(null);
+            }
+          }}
+          onBlur={() => {
+            updateGroupDescription(groupKey, editingDescription);
+            setEditingDescriptionKey(null);
+          }}
+          placeholder="Add description..."
+        />
+      </div>
+    );
+  }
+
+  // Get the actual group data from the groups array
+  const actualGroupKey = groupKey.startsWith("group-") ? groupKey.substring(6) : groupKey;
+  const groupData = findGroupByKey(actualGroupKey);
+
+  return (
+    <div className={`group-content ${editMode ? "group-content-editable" : ""}`}>
+      {editMode ? (
+        <button
+          className="group-name"
+          onClick={(e) => {
+            e.stopPropagation();
+            setEditingGroupKey(groupKey);
+            setEditingGroupName(data?.name || "");
+          }}
+          type="button"
+        >
+          {data?.name} ({countAllAccounts((node as AccountGroupNode).children ?? [])})
+        </button>
+      ) : (
+        <div className="group-name">
+          {data?.name} ({countAllAccounts((node as AccountGroupNode).children ?? [])})
+        </div>
+      )}
+      {groupData?.description ? (
+        editMode ? (
+          <button
+            className="group-description"
+            onClick={(e) => {
+              e.stopPropagation();
+              setEditingDescriptionKey(groupKey);
+              setEditingDescription(groupData.description || "");
+            }}
+            type="button"
+          >
+            {groupData.description}
+          </button>
+        ) : (
+          <div className="group-description">{groupData.description}</div>
+        )
+      ) : editMode ? (
+        <Button
+          size="small"
+          text
+          label="Add description"
+          icon="pi pi-plus"
+          onClick={(e) => {
+            e.stopPropagation();
+            setEditingDescriptionKey(groupKey);
+            setEditingDescription("");
+          }}
+          className="add-description-button"
+        />
+      ) : null}
+    </div>
+  );
+};
 
 export interface AccountTreeTableProps {
   onAccountSelect?: (accountId: string) => void;
@@ -121,26 +371,6 @@ function setAccountRoles(
   }));
 }
 
-function loadRolesForExpandedGroups(
-  nodes: (AccountGroupNode | AccountNode)[],
-  onLoad: (accountId: string) => Promise<void>
-): void {
-  for (const node of nodes) {
-    if ("id" in node.data) continue; // account node, skip
-    const group = node as AccountGroupNode;
-    if (group.expandedByDefault) {
-      for (const child of group.children ?? []) {
-        if ("id" in child.data) {
-          onLoad((child.data as Account).id).catch(console.error);
-        }
-      }
-    }
-    if (group.children) {
-      loadRolesForExpandedGroups(group.children, onLoad);
-    }
-  }
-}
-
 export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
   const { groups, setGroups, tags, autoUpdateEnabled, getConfig, sortBy } = useConfigStore();
   const [nodes, setNodes] = useState<AccountGroupNode[]>([]);
@@ -156,16 +386,36 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
   const [editingDescriptionKey, setEditingDescriptionKey] = useState<string | null>(null);
   const [editingDescription, setEditingDescription] = useState("");
 
+  const roleLoadQueue = useRef<{ accountId: string; execute: () => Promise<void> }[]>([]);
+  const activeLoads = useRef(0);
+  const MAX_CONCURRENT = 3;
+
+  const processQueue = useCallback(() => {
+    while (activeLoads.current < MAX_CONCURRENT && roleLoadQueue.current.length > 0) {
+      const entry = roleLoadQueue.current.shift()!;
+      activeLoads.current++;
+      entry.execute().finally(() => {
+        activeLoads.current--;
+        processQueue();
+      });
+    }
+  }, []);
+
+  const enqueueRoleLoad = useCallback(
+    (accountId: string, execute: () => Promise<void>) => {
+      if (roleLoadQueue.current.some((entry) => entry.accountId === accountId)) return;
+      roleLoadQueue.current.push({ accountId, execute });
+      processQueue();
+    },
+    [processQueue]
+  );
+
   useEffect(() => {
     // Extract and group accounts from the page
     const accounts = extractAccounts();
     const grouped = getAccountTree(accounts, groups, tags);
     setNodes(grouped);
     setExpandedKeys(collectExpandedKeys(grouped));
-    loadRolesForExpandedGroups(grouped, async (accountId) => {
-      const roles = await getAccountRoles(accountId);
-      setNodes((prev) => setAccountRoles(prev, accountId, roles));
-    });
   }, [groups, tags]);
 
   useEffect(() => {
@@ -173,242 +423,26 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
     setJsonConfig(JSON.stringify(getConfig(), null, 2));
   }, [getConfig]);
 
-  /**
-   * Render custom template for each tree node
-   */
-  const nodeTemplate = (node: TreeNode) => {
-    const data = node.data;
-
-    // Account node - has an id property
-    if ("id" in data) {
-      const account = data as Account;
-      return (
-        <div className="account-node">
-          <div className="account-header">
-            <span className="account-name-group">
-              {account.tags && account.tags.length > 0 && (
-                <div className="tag-dots">
-                  {account.tags.map((tagKey) => {
-                    const tagConfig = tags.find((t) => t.key === tagKey);
-                    return tagConfig ? (
-                      <span
-                        key={tagKey}
-                        className="tag-dot"
-                        style={{ backgroundColor: tagConfig.colour }}
-                        title={tagConfig.name}
-                      />
-                    ) : null;
-                  })}
-                </div>
-              )}
-              <span className="account-name">{account.name}</span>
-            </span>
-            <span className="account-id">({account.id})</span>
-            {account.roles ? (
-              <div className="account-roles">
-                {account.roles.map((role) => (
-                  <a
-                    key={role.name}
-                    href={role.consoleUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="account-role-link"
-                  >
-                    {role.name}
-                  </a>
-                ))}
-              </div>
-            ) : (
-              <Button
-                size="small"
-                text
-                label="Load roles"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  getAccountRoles(account.id)
-                    .then((roles) => {
-                      setNodes((prev) => setAccountRoles(prev, account.id, roles));
-                    })
-                    .catch(console.error);
-                }}
-              />
-            )}
-          </div>
-          {account.description && <div className="account-description">{account.description}</div>}
-        </div>
-      );
-    }
-
-    // Group node - just name
-    const groupKey = node.key as string;
-    const isEditingName = editMode && editingGroupKey === groupKey;
-    const isEditingDesc = editMode && editingDescriptionKey === groupKey;
-
-    if (isEditingName) {
-      return (
-        // biome-ignore lint/a11y/useKeyWithClickEvents: Container div only stops event propagation
-        // biome-ignore lint/a11y/noStaticElementInteractions: Container div only stops event propagation
-        <div className="group-edit-container" onClick={(e) => e.stopPropagation()}>
-          <input
-            type="text"
-            value={editingGroupName}
-            onChange={(e) => setEditingGroupName(e.target.value)}
-            className="group-edit-input"
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => {
-              e.stopPropagation();
-              if (e.key === "Enter") {
-                updateGroupName(groupKey, editingGroupName);
-                setEditingGroupKey(null);
-              } else if (e.key === "Escape") {
-                setEditingGroupKey(null);
-              }
-            }}
-            onBlur={() => {
-              updateGroupName(groupKey, editingGroupName);
-              setEditingGroupKey(null);
-            }}
-          />
-        </div>
-      );
-    }
-
-    if (isEditingDesc) {
-      return (
-        // biome-ignore lint/a11y/useKeyWithClickEvents: Container div only stops event propagation
-        // biome-ignore lint/a11y/noStaticElementInteractions: Container div only stops event propagation
-        <div className="group-edit-container" onClick={(e) => e.stopPropagation()}>
-          {/* biome-ignore lint/a11y/useKeyWithClickEvents: Editing mode */}
-          {/* biome-ignore lint/a11y/noStaticElementInteractions: Editing mode */}
-          <span
-            className="group-name"
-            onClick={(e) => {
-              if (editMode) {
-                e.stopPropagation();
-                setEditingGroupKey(groupKey);
-                setEditingGroupName(data?.name || "");
-              }
-            }}
-          >
-            {data?.name} ({countAllAccounts((node as AccountGroupNode).children ?? [])})
-          </span>
-          <textarea
-            value={editingDescription}
-            onChange={(e) => setEditingDescription(e.target.value)}
-            className="group-description-input"
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => {
-              e.stopPropagation();
-              if (e.key === "Escape") {
-                setEditingDescriptionKey(null);
-              }
-            }}
-            onBlur={() => {
-              updateGroupDescription(groupKey, editingDescription);
-              setEditingDescriptionKey(null);
-            }}
-            placeholder="Add description..."
-          />
-        </div>
-      );
-    }
-
-    // Get the actual group data from the groups array
-    const actualGroupKey = groupKey.startsWith("group-") ? groupKey.substring(6) : groupKey;
-    const groupData = findGroupByKey(actualGroupKey);
-
-    return (
-      <div className={`group-content ${editMode ? "group-content-editable" : ""}`}>
-        {editMode ? (
-          <button
-            className="group-name"
-            onClick={(e) => {
-              e.stopPropagation();
-              setEditingGroupKey(groupKey);
-              setEditingGroupName(data?.name || "");
-            }}
-            type="button"
-          >
-            {data?.name} ({countAllAccounts((node as AccountGroupNode).children ?? [])})
-          </button>
-        ) : (
-          <div className="group-name">
-            {data?.name} ({countAllAccounts((node as AccountGroupNode).children ?? [])})
-          </div>
-        )}
-        {groupData?.description ? (
-          editMode ? (
-            <button
-              className="group-description"
-              onClick={(e) => {
-                e.stopPropagation();
-                setEditingDescriptionKey(groupKey);
-                setEditingDescription(groupData.description || "");
-              }}
-              type="button"
-            >
-              {groupData.description}
-            </button>
-          ) : (
-            <div className="group-description">{groupData.description}</div>
-          )
-        ) : editMode ? (
-          <Button
-            size="small"
-            text
-            label="Add description"
-            icon="pi pi-plus"
-            onClick={(e) => {
-              e.stopPropagation();
-              setEditingDescriptionKey(groupKey);
-              setEditingDescription("");
-            }}
-            className="add-description-button"
-          />
-        ) : null}
-      </div>
-    );
-  };
-
-  const loadRolesForChildren = (groupNode: TreeNode) => {
-    const children = (groupNode as AccountGroupNode).children ?? [];
-    (async () => {
-      const accountsToLoad = children.filter(
-        (child) => "id" in child.data && !(child.data as Account).roles
-      );
-
-      // Maintain a queue and load up to 3 in parallel
-      // As soon as one finishes, start the next one
-      const queue = [...accountsToLoad];
-      const MAX_CONCURRENT = 3;
-
-      const processNext = async () => {
-        if (queue.length === 0) return;
-
-        const child = queue.shift()!;
-        const account = child.data as Account;
-
-        try {
-          const roles = await getAccountRoles(account.id);
-          setNodes((prev) => setAccountRoles(prev, account.id, roles));
-        } catch (error) {
-          console.error(error);
-        }
-
-        // After this finishes, start the next one
-        if (queue.length > 0) {
-          await processNext();
-        }
-      };
-
-      // Start up to 3 concurrent workers
-      const workers = [];
-      for (let i = 0; i < Math.min(MAX_CONCURRENT, accountsToLoad.length); i++) {
-        workers.push(processNext());
-      }
-      await Promise.all(workers);
-    })();
-  };
+  const nodeTemplate = (node: TreeNode) => (
+    <NodeTemplate
+      node={node}
+      tags={tags}
+      editMode={editMode}
+      editingGroupKey={editingGroupKey}
+      editingGroupName={editingGroupName}
+      setEditingGroupKey={setEditingGroupKey}
+      setEditingGroupName={setEditingGroupName}
+      editingDescriptionKey={editingDescriptionKey}
+      editingDescription={editingDescription}
+      setEditingDescriptionKey={setEditingDescriptionKey}
+      setEditingDescription={setEditingDescription}
+      updateGroupName={updateGroupName}
+      updateGroupDescription={updateGroupDescription}
+      findGroupByKey={findGroupByKey}
+      setNodes={setNodes}
+      enqueueRoleLoad={enqueueRoleLoad}
+    />
+  );
 
   const toggleTag = (tagKey: string) => {
     setSelectedTags((prev) => {
@@ -509,11 +543,8 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
       filtered = searchFilterNodes(filtered, searchQuery) as AccountGroupNode[];
     }
 
-    console.log("___SSS", JSON.parse(JSON.stringify(filtered, null, 2)));
-
     // Apply sorting based on sortBy configuration
     filtered = sortAccountsByConfig(filtered, sortBy, tags);
-    console.log("___SSS2", JSON.parse(JSON.stringify(filtered, null, 2)));
 
     return filtered;
   })();
@@ -592,34 +623,7 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
           nodeTemplate={nodeTemplate}
           expandedKeys={expandedKeys}
           onToggle={(e) => {
-            const newExpandedKeys = e.value as Record<string, boolean>;
-            // Find which keys were newly expanded
-            for (const key of Object.keys(newExpandedKeys)) {
-              if (!expandedKeys[key]) {
-                // This key was just expanded, find and load roles for the node
-                const findNodeByKey = (
-                  nodes: (AccountGroupNode | AccountNode)[],
-                  targetKey: string
-                ): TreeNode | null => {
-                  for (const node of nodes) {
-                    if (node.key === targetKey) return node;
-                    if (node.children) {
-                      const found = findNodeByKey(
-                        node.children as (AccountGroupNode | AccountNode)[],
-                        targetKey
-                      );
-                      if (found) return found;
-                    }
-                  }
-                  return null;
-                };
-                const expandedNode = findNodeByKey(visibleNodes, key);
-                if (expandedNode) {
-                  loadRolesForChildren(expandedNode);
-                }
-              }
-            }
-            setExpandedKeys(newExpandedKeys);
+            setExpandedKeys(e.value as Record<string, boolean>);
           }}
           onNodeClick={({ node }) => {
             if (!node.children?.length) return; // Only toggle groups
@@ -627,13 +631,7 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
             setExpandedKeys((prev) => {
               const { [key]: previousKeyValue, ...otherExpandedKeys } = prev;
               const isExpanding = !previousKeyValue;
-              const newKeys = isExpanding
-                ? { ...otherExpandedKeys, [key]: true }
-                : otherExpandedKeys;
-              if (isExpanding) {
-                loadRolesForChildren(node);
-              }
-              return newKeys;
+              return isExpanding ? { ...otherExpandedKeys, [key]: true } : otherExpandedKeys;
             });
           }}
         />
