@@ -1,0 +1,242 @@
+.tag-settings {
+  .tags-section {
+    display: flex;
+    flex-direction: column;
+    gap: 1em;
+
+    .section-heading {
+      margin: 0 0 8px;
+      font-size: 1.2rem;
+      font-weight: 600;
+    }
+  }
+
+  .tags-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+
+    .empty-message {
+      color: var(--color-text);
+      opacity: 0.6;
+      font-style: italic;
+      margin: 8px 0;
+    }
+  }
+
+  .tag-item {
+    padding: 12px;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    background-color: var(--color-bg-header);
+  }
+
+  .tag-item {
+    &.drag-over {
+      border-color: #3b82f6;
+      background-color: rgba(59, 130, 246, 0.08);
+    }
+  }
+
+  .drag-handle {
+    cursor: grab;
+    color: var(--color-text);
+    opacity: 0.4;
+    padding: 4px;
+    flex-shrink: 0;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    background: none;
+    border: none;
+
+    &:active {
+      cursor: grabbing;
+    }
+  }
+
+  .tag-display {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+
+    .tag-preview {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1;
+
+      .tag-colour-dot {
+        display: inline-block;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        border: 1px solid rgba(0, 0, 0, 0.1);
+        flex-shrink: 0;
+      }
+
+      .tag-info {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+
+        .tag-name {
+          font-weight: 500;
+          color: var(--color-text);
+        }
+
+        .tag-key {
+          font-size: 0.9rem;
+          color: var(--color-text);
+          opacity: 0.7;
+          font-family: monospace;
+        }
+
+        .tag-matcher {
+          font-size: 0.85rem;
+          color: var(--color-text);
+          opacity: 0.6;
+          font-family: monospace;
+        }
+      }
+    }
+
+    .tag-actions {
+      display: flex;
+      gap: 4px;
+    }
+  }
+
+  .tag-edit-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+
+    .form-column {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+
+      .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+
+        label {
+          font-size: 0.9rem;
+          font-weight: 500;
+          color: var(--color-text-heading);
+        }
+
+        .p-inputtext {
+          font-size: 1.2rem;
+
+          &.p-invalid {
+            border-color: #dc2626;
+          }
+        }
+
+        .colour-input-group {
+          display: flex;
+          gap: 8px;
+          align-items: center;
+          flex-wrap: wrap;
+
+          .p-colorpicker {
+            flex-shrink: 0;
+          }
+
+          .hex-input {
+            max-width: 9ch;
+            font-size: 1.2rem;
+          }
+        }
+
+        .matcher-error {
+          color: #dc2626;
+          font-size: 0.85rem;
+          font-weight: 500;
+        }
+      }
+    }
+
+    .tag-edit-buttons {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+  }
+
+  .add-tag-section {
+    padding: 12px;
+    border: 1px dashed var(--color-border);
+    border-radius: 4px;
+    background-color: var(--color-bg-header);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+
+    h5 {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 500;
+    }
+
+    .form-column {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+
+      .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+
+        label {
+          font-size: 0.9rem;
+          font-weight: 500;
+          color: var(--color-text-heading);
+        }
+
+        .p-inputtext {
+          font-size: 1.2rem;
+          width: 100%;
+
+          &.p-invalid {
+            border-color: #dc2626;
+          }
+        }
+
+        .colour-input-group {
+          display: flex;
+          gap: 8px;
+          align-items: center;
+          flex-wrap: wrap;
+
+          .p-colorpicker {
+            flex-shrink: 0;
+          }
+
+          .hex-input {
+            max-width: 9ch;
+            font-size: 1.2rem;
+          }
+        }
+
+        .matcher-error {
+          color: #dc2626;
+          font-size: 0.85rem;
+          font-weight: 500;
+        }
+      }
+    }
+  }
+
+  .add-tag-button {
+    align-self: flex-start;
+  }
+}

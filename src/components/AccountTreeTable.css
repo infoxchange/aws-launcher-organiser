@@ -123,33 +123,29 @@
     text-decoration: none;
   }
 
-  .environment-dot {
+  .tag-dots {
+    display: inline-flex;
+    gap: -2px;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .tag-dot {
     display: inline-block;
-    width: 8px;
-    height: 8px;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.3);
     vertical-align: middle;
     flex-shrink: 0;
+    margin-right: -4px;
 
-    &.dev,
-    &.sandbox {
-      background-color: #22c55e;
+    &:first-child {
+      margin-right: 3px;
     }
 
-    &.test {
-      background-color: #eab308;
-    }
-
-    &.uat {
-      background-color: #f97316;
-    }
-
-    &.prod {
-      background-color: #ef4444;
-    }
-
-    &.unknown {
-      background-color: #9ca3af;
+    &:last-child {
+      margin-right: 0;
     }
   }
 

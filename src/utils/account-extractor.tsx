@@ -1,10 +1,6 @@
 import type { TreeNode } from "primereact/treenode";
 import type { IconType } from "primereact/utils";
-import type { PredefinedGroup } from "./configStore";
-
-export const environments = ["dev", "test", "uat", "prod"] as const;
-
-export type Environment = (typeof environments)[number];
+import type { PredefinedGroup, TagConfig } from "./configStore";
 
 /**
  * Extracts and groups AWS accounts from the SSO start page
@@ -14,7 +10,7 @@ export interface Account {
   id: string;
   name: string;
   email: string;
-  environment?: Environment;
+  tags?: string[];
   roles?: AccountRole[];
   description?: string;
 }
@@ -133,8 +129,45 @@ export async function getAccountRoles(accountId: string): Promise<AccountRole[]>
  */
 export function groupAccountsByPattern(
   accounts: Account[],
-  predefinedGroups: PredefinedGroup[]
+  predefinedGroups: PredefinedGroup[],
+  availableTags: TagConfig[] = []
 ): AccountGroupNode[] {
+  // Defensive check: ensure predefinedGroups is an array
+  if (!Array.isArray(predefinedGroups)) {
+    console.error("groupAccountsByPattern received non-array predefinedGroups:", predefinedGroups);
+    // Try to extract groups if it looks like a RemoteConfig object
+    if (
+      typeof predefinedGroups === "object" &&
+      predefinedGroups !== null &&
+      "groups" in predefinedGroups
+    ) {
+      const config = predefinedGroups as Record<string, unknown>;
+      if (Array.isArray(config.groups)) {
+        predefinedGroups = config.groups;
+      } else {
+        predefinedGroups = [];
+      }
+    } else {
+      predefinedGroups = [];
+    }
+  }
+
+  // Defensive check: ensure availableTags is an array
+  if (!Array.isArray(availableTags)) {
+    console.error("groupAccountsByPattern received non-array availableTags:", availableTags);
+    // Try to extract tags if it looks like a RemoteConfig object
+    if (typeof availableTags === "object" && availableTags !== null && "tags" in availableTags) {
+      const config = availableTags as Record<string, unknown>;
+      if (Array.isArray(config.tags)) {
+        availableTags = config.tags;
+      } else {
+        availableTags = [];
+      }
+    } else {
+      availableTags = [];
+    }
+  }
+
   /**
    * Test if an account name matches a matcher (single or multiple RegExps)
    */
@@ -148,6 +181,34 @@ export function groupAccountsByPattern(
     }
 
     return createRegex(matcher).test(accountName);
+  }
+
+  /**
+   * Extract tags from account name based on available tag keys
+   */
+  function extractTagsFromName(accountName: string, tagConfigs: TagConfig[]): string[] {
+    const foundTags: string[] = [];
+    for (const tag of tagConfigs) {
+      let matches = false;
+      // Use matcher if provided, otherwise fall back to suffix matching
+      if (tag.matcher) {
+        try {
+          const regex = new RegExp(`^${tag.matcher}$`);
+          matches = regex.test(accountName);
+        } catch {
+          // If regex is invalid, skip this tag
+          matches = false;
+        }
+      } else {
+        const keySuffix = accountName.endsWith(`-${tag.key}`);
+        const nameSuffix = accountName.endsWith(`-${tag.name.toLowerCase()}`);
+        matches = keySuffix || nameSuffix;
+      }
+      if (matches) {
+        foundTags.push(tag.key);
+      }
+    }
+    return foundTags;
   }
 
   /**
@@ -178,6 +239,26 @@ export function groupAccountsByPattern(
    * Build tree from predefined groups, placing accounts in their matching groups
    */
   function buildGroupTree(groupsToProcess: PredefinedGroup[]): AccountGroupNode[] {
+    // Defensive check: ensure groupsToProcess is an array
+    if (!Array.isArray(groupsToProcess)) {
+      console.error("buildGroupTree received non-array value:", groupsToProcess);
+      // Try to extract groups if it looks like a RemoteConfig object
+      if (
+        typeof groupsToProcess === "object" &&
+        groupsToProcess !== null &&
+        "groups" in groupsToProcess
+      ) {
+        const config = groupsToProcess as Record<string, unknown>;
+        if (Array.isArray(config.groups)) {
+          groupsToProcess = config.groups;
+        } else {
+          return [];
+        }
+      } else {
+        return [];
+      }
+    }
+
     return groupsToProcess
       .map((group) => {
         // Find all accounts matching this group
@@ -209,36 +290,36 @@ export function groupAccountsByPattern(
           if (!accountsInNestedGroups.has(account.id)) {
             const accountNode: AccountNode = {
               key: account.id,
-              data: account,
+              data: {
+                ...account,
+                tags: extractTagsFromName(account.name, availableTags),
+              } as Account,
               icon: "pi pi-box",
             };
-            const nameSuffix = account.name.match(/-(\w+)$/)?.[1];
-            if (nameSuffix && environments.includes(nameSuffix as Environment)) {
-              accountNode.data.environment = nameSuffix as Environment;
-            }
             children.push(accountNode);
           }
         });
 
         children.sort((a, b) => {
-          const getEnv = (node: AccountGroupNode | AccountNode): Environment | undefined =>
-            "environment" in node.data ? (node.data as Account).environment : undefined;
-
           const getPrefix = (node: AccountGroupNode | AccountNode): string => {
-            const env = getEnv(node);
             const name = node.data.name;
-            return env !== undefined ? name.replace(new RegExp(`-${env}$`), "") : name;
+            // Remove any tag suffixes from the name for sorting
+            const tagKeysAndNames = availableTags.flatMap((t) => [t.key, t.name.toLowerCase()]);
+            let prefix = name;
+            for (const tag of tagKeysAndNames) {
+              if (prefix.endsWith(`-${tag}`)) {
+                prefix = prefix.slice(0, -(tag.length + 1));
+              }
+            }
+            return prefix;
           };
 
           const prefixA = getPrefix(a);
           const prefixB = getPrefix(b);
           if (prefixA !== prefixB) return prefixA.localeCompare(prefixB);
 
-          const envA = getEnv(a);
-          const envB = getEnv(b);
-          const indexA = envA !== undefined ? environments.indexOf(envA) : environments.length;
-          const indexB = envB !== undefined ? environments.indexOf(envB) : environments.length;
-          return indexA - indexB;
+          // If prefixes are equal, compare by name
+          return a.data.name.localeCompare(b.data.name);
         });
 
         const renderIconSrc = (src: string) => {
@@ -299,7 +380,10 @@ export function groupAccountsByPattern(
         },
         children: prefixAccounts.map((account) => ({
           key: account.id,
-          data: account,
+          data: {
+            ...account,
+            tags: extractTagsFromName(account.name, availableTags),
+          },
         })),
       };
     }

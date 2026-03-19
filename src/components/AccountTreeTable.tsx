@@ -13,8 +13,6 @@ import {
   type AccountGroupNode,
   type AccountNode,
   type AccountRole,
-  type Environment,
-  environments,
   extractAccounts,
   getAccountRoles,
   groupAccountsByPattern,
@@ -41,16 +39,20 @@ function collectExpandedKeys(nodes: (AccountGroupNode | AccountNode)[]): Record<
 
 function filterNodes(
   nodes: (AccountGroupNode | AccountNode)[],
-  selectedEnvs: Set<Environment>
+  selectedTags: Set<string>
 ): (AccountGroupNode | AccountNode)[] {
   return nodes.reduce<(AccountGroupNode | AccountNode)[]>((acc, node) => {
     if ("id" in node.data) {
-      // Account node — keep if its environment is selected
-      const env = (node.data as Account).environment;
-      if (env !== undefined && selectedEnvs.has(env)) acc.push(node);
+      // Account node — keep if it has any of the selected tags
+      const account = node.data as Account;
+      const accountTags = new Set(account.tags || []);
+      // If no tags selected, show all accounts; if tags selected, only show if account has matching tag
+      if (selectedTags.size === 0 || Array.from(selectedTags).some((tag) => accountTags.has(tag))) {
+        acc.push(node);
+      }
     } else {
       // Group node — recurse and only keep if children remain
-      const filteredChildren = filterNodes((node as AccountGroupNode).children ?? [], selectedEnvs);
+      const filteredChildren = filterNodes((node as AccountGroupNode).children ?? [], selectedTags);
       if (filteredChildren.length > 0) {
         acc.push({ ...node, children: filteredChildren } as AccountGroupNode);
       }
@@ -139,13 +141,13 @@ function loadRolesForExpandedGroups(
 }
 
 export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
-  const { groups, setGroups, autoUpdateEnabled } = useConfigStore();
+  const { groups, setGroups, tags, autoUpdateEnabled, getConfig } = useConfigStore();
   const [nodes, setNodes] = useState<AccountGroupNode[]>([]);
   const [expandedKeys, setExpandedKeys] = useState<Record<string, boolean>>({});
-  const [selectedEnvs, setSelectedEnvs] = useState<Set<Environment>>(new Set());
+  const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [showSettings, setShowSettings] = useState(false);
-  const [jsonConfig, setJsonConfig] = useState(JSON.stringify(groups, null, 2));
+  const [jsonConfig, setJsonConfig] = useState(JSON.stringify(getConfig(), null, 2));
   const [configError, setConfigError] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [editingGroupKey, setEditingGroupKey] = useState<string | null>(null);
@@ -156,19 +158,19 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
   useEffect(() => {
     // Extract and group accounts from the page
     const accounts = extractAccounts();
-    const grouped = groupAccountsByPattern(accounts, groups);
+    const grouped = groupAccountsByPattern(accounts, groups, tags);
     setNodes(grouped);
     setExpandedKeys(collectExpandedKeys(grouped));
     loadRolesForExpandedGroups(grouped, async (accountId) => {
       const roles = await getAccountRoles(accountId);
       setNodes((prev) => setAccountRoles(prev, accountId, roles));
     });
-  }, [groups]);
+  }, [groups, tags]);
 
   useEffect(() => {
-    // Update JSON config when groups change
-    setJsonConfig(JSON.stringify(groups, null, 2));
-  }, [groups]);
+    // Update JSON config when groups or tags change
+    setJsonConfig(JSON.stringify(getConfig(), null, 2));
+  }, [getConfig]);
 
   /**
    * Render custom template for each tree node
@@ -183,12 +185,20 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
         <div className="account-node">
           <div className="account-header">
             <span className="account-name-group">
-              {(account.environment || account.name.endsWith("-sandbox")) && (
-                <span
-                  className={`environment-dot ${
-                    account.name.endsWith("-sandbox") ? "sandbox" : account.environment || "unknown"
-                  }`}
-                />
+              {account.tags && account.tags.length > 0 && (
+                <div className="tag-dots">
+                  {account.tags.map((tagKey) => {
+                    const tagConfig = tags.find((t) => t.key === tagKey);
+                    return tagConfig ? (
+                      <span
+                        key={tagKey}
+                        className="tag-dot"
+                        style={{ backgroundColor: tagConfig.colour }}
+                        title={tagConfig.name}
+                      />
+                    ) : null;
+                  })}
+                </div>
               )}
               <span className="account-name">{account.name}</span>
             </span>
@@ -373,10 +383,10 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
     }
   };
 
-  const toggleEnv = (env: Environment) => {
-    setSelectedEnvs((prev) => {
+  const toggleTag = (tagKey: string) => {
+    setSelectedTags((prev) => {
       const next = new Set(prev);
-      next.has(env) ? next.delete(env) : next.add(env);
+      next.has(tagKey) ? next.delete(tagKey) : next.add(tagKey);
       return next;
     });
   };
@@ -406,6 +416,25 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
 
   const findGroupByKey = (actualGroupKey: string): (typeof groups)[0] | null => {
     const search = (groupsToSearch: typeof groups): (typeof groups)[0] | null => {
+      // Defensive check: ensure groupsToSearch is an array
+      if (!Array.isArray(groupsToSearch)) {
+        console.error("findGroupByKey received non-array groupsToSearch:", groupsToSearch);
+        // Try to extract groups if it looks like a RemoteConfig object
+        if (
+          typeof groupsToSearch === "object" &&
+          groupsToSearch !== null &&
+          "groups" in groupsToSearch
+        ) {
+          const config = groupsToSearch as Record<string, unknown>;
+          if (Array.isArray(config.groups)) {
+            groupsToSearch = config.groups;
+          } else {
+            return null;
+          }
+        } else {
+          return null;
+        }
+      }
       for (const group of groupsToSearch) {
         if (group.key === actualGroupKey) {
           return group;
@@ -445,8 +474,8 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
   const visibleNodes = (() => {
     let filtered = nodes;
 
-    if (selectedEnvs.size > 0) {
-      filtered = filterNodes(filtered, selectedEnvs) as AccountGroupNode[];
+    if (selectedTags.size > 0) {
+      filtered = filterNodes(filtered, selectedTags) as AccountGroupNode[];
     }
 
     if (searchQuery.trim()) {
@@ -467,17 +496,24 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
             onChange={(e) => setSearchQuery(e.target.value)}
             className="search-input"
           />
-          <ButtonGroup>
-            {environments.map((env) => (
-              <Button
-                key={env}
-                label={env}
-                rounded
-                outlined={!selectedEnvs.has(env)}
-                onClick={() => toggleEnv(env)}
-              />
-            ))}
-          </ButtonGroup>
+          {tags.length > 0 && (
+            <ButtonGroup>
+              {tags.map((tag) => (
+                <Button
+                  key={tag.key}
+                  label={tag.name}
+                  rounded
+                  outlined={!selectedTags.has(tag.key)}
+                  onClick={() => toggleTag(tag.key)}
+                  style={{
+                    borderColor: tag.colour,
+                    color: selectedTags.has(tag.key) ? "white" : tag.colour,
+                    backgroundColor: selectedTags.has(tag.key) ? tag.colour : "transparent",
+                  }}
+                />
+              ))}
+            </ButtonGroup>
+          )}
         </div>
         <div className="group">
           {!autoUpdateEnabled && (
@@ -496,7 +532,7 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
             text
             onClick={() => {
               setShowSettings(true);
-              setJsonConfig(JSON.stringify(groups, null, 2));
+              setJsonConfig(JSON.stringify(getConfig(), null, 2));
               setConfigError(null);
             }}
             className="settings-button"
@@ -507,7 +543,7 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
         visible={showSettings}
         onHide={() => {
           setShowSettings(false);
-          setJsonConfig(JSON.stringify(groups, null, 2));
+          setJsonConfig(JSON.stringify(getConfig(), null, 2));
           setConfigError(null);
         }}
         jsonConfig={jsonConfig}

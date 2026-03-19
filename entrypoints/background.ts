@@ -65,7 +65,7 @@ async function checkForConfigUpdates() {
 }
 
 export default defineBackground({
-  main(_ctx) {
+  main() {
     console.log("Background service worker loaded");
 
     // Recreate alarm on service worker startup (service workers can be killed/restarted)

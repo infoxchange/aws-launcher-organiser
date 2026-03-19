@@ -13,8 +13,8 @@
     "zip": "wxt zip",
     "zip:firefox": "wxt zip --browser firefox",
     "zip:chrome": "wxt zip --browser chrome",
-    "lint": "biome check --verbose",
-    "lint:fix": "biome check --write",
+    "lint": "biome check --verbose && tsc --noEmit",
+    "lint:fix": "biome check --write && tsc --noEmit",
     "format": "biome format --write",
     "generate-schema": "tsx scripts/generate-schema.ts",
     "lint-staged": "lint-staged"

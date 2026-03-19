@@ -1,5 +1,12 @@
 import { z } from "zod";
 
+export interface TagConfig {
+  key: string;
+  name: string;
+  colour: string;
+  matcher?: string;
+}
+
 export interface PredefinedGroup {
   key: string;
   name: string;
@@ -9,6 +16,13 @@ export interface PredefinedGroup {
   expandedByDefault?: boolean;
   description?: string;
 }
+
+export const TagConfigSchema: z.ZodType<TagConfig> = z.object({
+  key: z.string(),
+  name: z.string(),
+  colour: z.string(),
+  matcher: z.string().optional(),
+});
 
 export const PredefinedGroupSchema: z.ZodType<PredefinedGroup> = z.lazy(() =>
   z.object({
@@ -26,6 +40,7 @@ export const RemoteConfigSchema = z.object({
   $schema: z.string().optional(),
   version: z.number(),
   groups: z.array(PredefinedGroupSchema),
+  tags: z.array(TagConfigSchema).optional(),
 });
 
 export type RemoteConfig = z.infer<typeof RemoteConfigSchema>;

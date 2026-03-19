@@ -13,6 +13,28 @@
       "items": {
         "$ref": "#/$defs/__schema0"
       }
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "colour": {
+            "type": "string"
+          },
+          "matcher": {
+            "type": "string"
+          }
+        },
+        "required": ["key", "name", "colour"],
+        "additionalProperties": false
+      }
     }
   },
   "required": ["version", "groups"],

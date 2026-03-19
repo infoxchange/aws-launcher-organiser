@@ -1,12 +1,15 @@
 import { Button } from "primereact/button";
 import { Dialog } from "primereact/dialog";
+import { Fieldset } from "primereact/fieldset";
 import { InputSwitch } from "primereact/inputswitch";
 import { InputText } from "primereact/inputtext";
 import { Message } from "primereact/message";
 import { Password } from "primereact/password";
 import type React from "react";
 import { useState } from "react";
+import type { TagConfig } from "../utils/configStore";
 import { RemoteConfigSchema, useConfigStore } from "../utils/configStore";
+import { TagSettings } from "./TagSettings";
 import "./SettingsDialog.css";
 
 export interface SettingsDialogProps {
@@ -26,28 +29,72 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   configError,
   onConfigError,
 }) => {
-  const {
-    groups,
-    setGroups,
-    autoUpdateEnabled,
-    autoUpdateUrl,
-    autoUpdateAuthToken,
-    setAutoUpdateEnabled,
-    setAutoUpdateUrl,
-    setAutoUpdateAuthToken,
-  } = useConfigStore();
-
   const [testStatus, setTestStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [testMessage, setTestMessage] = useState<string | null>(null);
+  const [editingTagIndex, setEditingTagIndex] = useState<number | null>(null);
+  const [showAddTagForm, setShowAddTagForm] = useState(false);
+  const [editingTag, setEditingTag] = useState<TagConfig>({
+    key: "",
+    name: "",
+    colour: "#000000",
+  });
+  const [matcherError, setMatcherError] = useState<string | null>(null);
+
+  // Draft state — snapshotted from the store when the dialog opens, committed on Save
+  const [draftAutoUpdateEnabled, setDraftAutoUpdateEnabled] = useState(false);
+  const [draftAutoUpdateUrl, setDraftAutoUpdateUrl] = useState("");
+  const [draftAutoUpdateAuthToken, setDraftAutoUpdateAuthToken] = useState("");
+
+  const initializeDraft = () => {
+    const state = useConfigStore.getState();
+    setDraftAutoUpdateEnabled(state.autoUpdateEnabled);
+    setDraftAutoUpdateUrl(state.autoUpdateUrl);
+    setDraftAutoUpdateAuthToken(state.autoUpdateAuthToken);
+  };
+
+  // Parse tags out of the draft jsonConfig so TagSettings always reflects the textarea
+  const getTagsFromConfig = (): TagConfig[] => {
+    try {
+      const parsed = JSON.parse(jsonConfig);
+      return Array.isArray(parsed.tags) ? parsed.tags : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const handleTagsChange = (newTags: TagConfig[]) => {
+    try {
+      const parsed = JSON.parse(jsonConfig);
+      const updated = { ...parsed, tags: newTags.length > 0 ? newTags : undefined };
+      onConfigChange(JSON.stringify(updated, null, 2));
+    } catch {
+      // jsonConfig is currently invalid JSON; can't update it
+    }
+  };
+
+  const validateMatcherRegex = (matcher: string): boolean => {
+    if (!matcher) {
+      setMatcherError(null);
+      return true;
+    }
+    try {
+      new RegExp(`^${matcher}$`);
+      setMatcherError(null);
+      return true;
+    } catch (err) {
+      setMatcherError(`Invalid regex: ${err instanceof Error ? err.message : "Unknown error"}`);
+      return false;
+    }
+  };
 
   const runConnectionTest = async () => {
-    if (!autoUpdateUrl) return;
+    if (!draftAutoUpdateUrl) return;
     setTestStatus("loading");
     setTestMessage(null);
     try {
       const headers: Record<string, string> = {};
-      if (autoUpdateAuthToken) headers.Authorization = `Bearer ${autoUpdateAuthToken}`;
-      const response = await fetch(autoUpdateUrl, { headers });
+      if (draftAutoUpdateAuthToken) headers.Authorization = `Bearer ${draftAutoUpdateAuthToken}`;
+      const response = await fetch(draftAutoUpdateUrl, { headers });
       if (!response.ok) {
         setTestStatus("error");
         setTestMessage(`HTTP ${response.status}: ${response.statusText}`);
@@ -62,6 +109,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
         return;
       }
       const result = RemoteConfigSchema.safeParse(json);
+      console.log("Validation result:", result);
       if (!result.success) {
         setTestStatus("error");
         setTestMessage(
@@ -73,8 +121,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
       setTestMessage(
         `Config updated — ${result.data.groups.length} top-level group(s), version ${result.data.version}.`
       );
-      setGroups(result.data.groups);
-      onConfigChange(JSON.stringify(result.data.groups, null, 2));
+      onConfigChange(JSON.stringify(result.data, null, 2));
     } catch (err) {
       setTestStatus("error");
       setTestMessage(`Fetch failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -82,7 +129,14 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   };
 
   return (
-    <Dialog header="Settings" visible={visible} onHide={onHide} modal style={{ width: "50vw" }}>
+    <Dialog
+      header="Settings"
+      visible={visible}
+      onHide={onHide}
+      onShow={initializeDraft}
+      modal
+      style={{ width: "50vw" }}
+    >
       <div className="settings-dialog">
         <div className="settings-content">
           <section className="auto-update-section">
@@ -91,11 +145,11 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
               <label htmlFor="auto-update-toggle">Enable auto update</label>
               <InputSwitch
                 inputId="auto-update-toggle"
-                checked={autoUpdateEnabled}
-                onChange={(e) => setAutoUpdateEnabled(e.value ?? false)}
+                checked={draftAutoUpdateEnabled}
+                onChange={(e) => setDraftAutoUpdateEnabled(e.value ?? false)}
               />
             </div>
-            {autoUpdateEnabled && (
+            {draftAutoUpdateEnabled && (
               <>
                 <Message
                   severity="info"
@@ -107,9 +161,9 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                   <div className="url-input-row">
                     <InputText
                       id="auto-update-url"
-                      value={autoUpdateUrl}
+                      value={draftAutoUpdateUrl}
                       onChange={(e) => {
-                        setAutoUpdateUrl(e.target.value);
+                        setDraftAutoUpdateUrl(e.target.value);
                         setTestStatus("idle");
                         setTestMessage(null);
                       }}
@@ -120,7 +174,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                       label="Test"
                       icon={testStatus === "loading" ? "pi pi-spin pi-spinner" : "pi pi-bolt"}
                       outlined
-                      disabled={!autoUpdateUrl || testStatus === "loading"}
+                      disabled={!draftAutoUpdateUrl || testStatus === "loading"}
                       onClick={runConnectionTest}
                     />
                   </div>
@@ -142,8 +196,8 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                   <label htmlFor="auto-update-token">Auth Token (optional)</label>
                   <Password
                     inputId="auto-update-token"
-                    value={autoUpdateAuthToken}
-                    onChange={(e) => setAutoUpdateAuthToken(e.target.value)}
+                    value={draftAutoUpdateAuthToken}
+                    onChange={(e) => setDraftAutoUpdateAuthToken(e.target.value)}
                     feedback={false}
                     toggleMask
                     placeholder="Bearer token"
@@ -155,27 +209,57 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
             )}
           </section>
 
-          <hr className="section-divider" />
+          {!draftAutoUpdateEnabled && (
+            <>
+              <hr className="section-divider" />
 
-          <label htmlFor="json-config">Configuration (JSON)</label>
-          <textarea
-            id="json-config"
-            value={jsonConfig}
-            onChange={(e) => {
-              onConfigChange(e.target.value);
-              onConfigError(null);
-            }}
-            className="json-textarea"
-            readOnly={autoUpdateEnabled}
-          />
-          {configError && <div className="config-error">{configError}</div>}
+              <TagSettings
+                tags={getTagsFromConfig()}
+                onTagsChange={handleTagsChange}
+                editingTag={editingTag}
+                onEditingTagChange={setEditingTag}
+                editingTagIndex={editingTagIndex}
+                onEditingTagIndexChange={setEditingTagIndex}
+                showAddTagForm={showAddTagForm}
+                onShowAddTagFormChange={setShowAddTagForm}
+                matcherError={matcherError}
+                onMatcherErrorChange={setMatcherError}
+                onValidateMatcher={validateMatcherRegex}
+              />
+            </>
+          )}
+
+          <hr className="section-divider" />
+          <Fieldset legend="Advanced Configuration" toggleable collapsed>
+            <textarea
+              id="json-config"
+              value={jsonConfig}
+              onChange={(e) => {
+                onConfigChange(e.target.value);
+                onConfigError(null);
+              }}
+              className="json-textarea"
+              readOnly={draftAutoUpdateEnabled}
+            />
+            {configError && <div className="config-error">{configError}</div>}
+          </Fieldset>
           <div className="dialog-buttons">
             <Button
               label="Save"
               onClick={() => {
                 try {
                   const parsed = JSON.parse(jsonConfig);
-                  setGroups(parsed);
+                  const validated = RemoteConfigSchema.parse(parsed);
+                  const {
+                    setConfig,
+                    setAutoUpdateEnabled,
+                    setAutoUpdateUrl,
+                    setAutoUpdateAuthToken,
+                  } = useConfigStore.getState();
+                  setConfig(validated);
+                  setAutoUpdateEnabled(draftAutoUpdateEnabled);
+                  setAutoUpdateUrl(draftAutoUpdateUrl);
+                  setAutoUpdateAuthToken(draftAutoUpdateAuthToken);
                   onHide();
                   onConfigError(null);
                 } catch (e) {
@@ -188,9 +272,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
               label="Reset to Defaults"
               outlined
               onClick={() => {
-                const { resetToDefaults } = useConfigStore.getState();
-                resetToDefaults();
-                onConfigChange(JSON.stringify(useConfigStore.getState().groups, null, 2));
+                onConfigChange(JSON.stringify({ version: 1, groups: [] }, null, 2));
                 onConfigError(null);
               }}
             />
@@ -199,7 +281,6 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
               outlined
               onClick={() => {
                 onHide();
-                onConfigChange(JSON.stringify(groups, null, 2));
                 onConfigError(null);
               }}
             />
