@@ -13,12 +13,12 @@ export interface SortConfig {
   matcher?: string;
 }
 
-export interface PredefinedGroup {
+export interface Group {
   key: string;
   name: string;
   icon?: string;
   matcher?: string | string[];
-  children?: PredefinedGroup[];
+  children?: Group[];
   expandedByDefault?: boolean;
   description?: string;
 }
@@ -36,13 +36,13 @@ export const SortConfigSchema: z.ZodType<SortConfig> = z.object({
   matcher: z.string().optional(),
 });
 
-export const PredefinedGroupSchema: z.ZodType<PredefinedGroup> = z.lazy(() =>
+export const GroupSchema: z.ZodType<Group> = z.lazy(() =>
   z.object({
     key: z.string(),
     name: z.string(),
     icon: z.string().optional(),
     matcher: z.union([z.string(), z.array(z.string())]).optional(),
-    children: z.array(PredefinedGroupSchema).optional(),
+    children: z.array(GroupSchema).optional(),
     expandedByDefault: z.boolean().optional(),
     description: z.string().optional(),
   })
@@ -51,7 +51,7 @@ export const PredefinedGroupSchema: z.ZodType<PredefinedGroup> = z.lazy(() =>
 export const RemoteConfigSchema = z.object({
   $schema: z.string().optional(),
   version: z.number(),
-  groups: z.array(PredefinedGroupSchema),
+  groups: z.array(GroupSchema),
   tags: z.array(TagConfigSchema).optional(),
   sortBy: z.array(SortConfigSchema).optional(),
 });

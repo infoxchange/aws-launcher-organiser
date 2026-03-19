@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import {
-  type PredefinedGroup,
+  type Group,
   type RemoteConfig,
   RemoteConfigSchema,
   type SortConfig,
@@ -9,10 +9,10 @@ import {
 } from "./config-schema";
 
 // Re-export for convenience
-export type { PredefinedGroup, RemoteConfig, SortConfig, TagConfig };
+export type { Group, RemoteConfig, SortConfig, TagConfig };
 export { RemoteConfigSchema };
 
-const defaultGroups: PredefinedGroup[] = [];
+const defaultGroups: Group[] = [];
 const defaultTags: TagConfig[] = [];
 const defaultSortBy: SortConfig[] = [];
 
@@ -32,13 +32,13 @@ const chromeLocalStorage = createJSONStorage(() => ({
 }));
 
 interface ConfigStore {
-  groups: PredefinedGroup[];
+  groups: Group[];
   tags: TagConfig[];
   sortBy: SortConfig[];
   autoUpdateEnabled: boolean;
   autoUpdateUrl: string;
   autoUpdateAuthToken: string;
-  setGroups: (groups: PredefinedGroup[]) => void;
+  setGroups: (groups: Group[]) => void;
   setTags: (tags: TagConfig[]) => void;
   setSortBy: (sortBy: SortConfig[]) => void;
   setConfig: (config: RemoteConfig) => void;
@@ -102,7 +102,7 @@ export const useConfigStore = create<ConfigStore>()(
       autoUpdateEnabled: false,
       autoUpdateUrl: "",
       autoUpdateAuthToken: "",
-      setGroups: (groups: PredefinedGroup[]) => set({ groups }),
+      setGroups: (groups: Group[]) => set({ groups }),
       setTags: (tags: TagConfig[]) => {
         const error = validateTags(tags);
         if (error) {
@@ -158,7 +158,7 @@ export const useConfigStore = create<ConfigStore>()(
         const obj = state as Record<string, unknown>;
 
         // Extract groups and tags, handling RemoteConfig format
-        let groups: PredefinedGroup[] = defaultGroups;
+        let groups: Group[] = defaultGroups;
         let tags: TagConfig[] = defaultTags;
         let sortBy: SortConfig[] = defaultSortBy;
 
@@ -200,6 +200,6 @@ export const useConfigStore = create<ConfigStore>()(
   )
 );
 
-export function getDefaultGroups(): PredefinedGroup[] {
+export function getDefaultGroups(): Group[] {
   return defaultGroups;
 }

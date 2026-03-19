@@ -15,7 +15,7 @@ import {
   type AccountRole,
   extractAccounts,
   getAccountRoles,
-  groupAccountsByPattern,
+  getAccountTree,
 } from "../utils/account-extractor";
 import { useConfigStore } from "../utils/configStore";
 import { sortAccountsByConfig } from "../utils/sortAccounts";
@@ -159,7 +159,7 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
   useEffect(() => {
     // Extract and group accounts from the page
     const accounts = extractAccounts();
-    const grouped = groupAccountsByPattern(accounts, groups, tags);
+    const grouped = getAccountTree(accounts, groups, tags);
     setNodes(grouped);
     setExpandedKeys(collectExpandedKeys(grouped));
     loadRolesForExpandedGroups(grouped, async (accountId) => {

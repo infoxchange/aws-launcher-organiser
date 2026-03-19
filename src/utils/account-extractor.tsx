@@ -1,6 +1,6 @@
 import type { TreeNode } from "primereact/treenode";
 import type { IconType } from "primereact/utils";
-import type { PredefinedGroup, TagConfig } from "./configStore";
+import type { Group, TagConfig } from "./configStore";
 
 /**
  * Extracts and groups AWS accounts from the SSO start page
@@ -125,271 +125,213 @@ export async function getAccountRoles(accountId: string): Promise<AccountRole[]>
 }
 
 /**
- * Groups accounts by a pattern derived from display name, supporting nested groups
+ * Test if an account name matches a matcher (single or multiple RegExps)
  */
-export function groupAccountsByPattern(
-  accounts: Account[],
-  predefinedGroups: PredefinedGroup[],
-  availableTags: TagConfig[] = []
-): AccountGroupNode[] {
-  // Defensive check: ensure predefinedGroups is an array
-  if (!Array.isArray(predefinedGroups)) {
-    console.error("groupAccountsByPattern received non-array predefinedGroups:", predefinedGroups);
-    // Try to extract groups if it looks like a RemoteConfig object
-    if (
-      typeof predefinedGroups === "object" &&
-      predefinedGroups !== null &&
-      "groups" in predefinedGroups
-    ) {
-      const config = predefinedGroups as Record<string, unknown>;
-      if (Array.isArray(config.groups)) {
-        predefinedGroups = config.groups;
-      } else {
-        predefinedGroups = [];
+function testMatcher(matcher: string | string[] | undefined, accountName: string): boolean {
+  if (!matcher) return false;
+
+  const createRegex = (str: string): RegExp => {
+    // Add ^ and $ anchors if matcher doesn't contain them
+    let pattern = str;
+    if (!pattern.includes("^") && !pattern.includes("$")) {
+      pattern = `^${pattern}$`;
+    }
+    return new RegExp(pattern);
+  };
+
+  if (Array.isArray(matcher)) {
+    return matcher.some((m) => createRegex(m).test(accountName));
+  }
+
+  return createRegex(matcher).test(accountName);
+}
+
+/**
+ * Extract tags from account name based on available tag configs
+ */
+function extractTagsFromName(accountName: string, tagConfigs: TagConfig[]): string[] {
+  const foundTags: string[] = [];
+  for (const tag of tagConfigs) {
+    let matches = false;
+    // Use matcher if provided, otherwise fall back to suffix matching
+    if (tag.matcher) {
+      try {
+        const pattern =
+          tag.matcher.includes("^") || tag.matcher.includes("$") ? tag.matcher : `^${tag.matcher}$`;
+        const regex = new RegExp(pattern);
+        matches = regex.test(accountName);
+      } catch {
+        // If regex is invalid, skip this tag
+        matches = false;
       }
     } else {
-      predefinedGroups = [];
+      const keySuffix = accountName.endsWith(`-${tag.key}`);
+      const nameSuffix = accountName.endsWith(`-${tag.name.toLowerCase()}`);
+      matches = keySuffix || nameSuffix;
+    }
+    if (matches) {
+      foundTags.push(tag.key);
     }
   }
+  return foundTags;
+}
 
-  // Defensive check: ensure availableTags is an array
-  if (!Array.isArray(availableTags)) {
-    console.error("groupAccountsByPattern received non-array availableTags:", availableTags);
-    // Try to extract tags if it looks like a RemoteConfig object
-    if (typeof availableTags === "object" && availableTags !== null && "tags" in availableTags) {
-      const config = availableTags as Record<string, unknown>;
-      if (Array.isArray(config.tags)) {
-        availableTags = config.tags;
-      } else {
-        availableTags = [];
+/**
+ * Find the deepest matching group for an account
+ * Returns the path to the deepest matching group, or null if no match
+ */
+function findDeepestMatchingGroup(
+  account: Account,
+  groups: Group[]
+): { group: Group; path: Group[] } | null {
+  let deepestMatch: { group: Group; path: Group[] } | null = null;
+
+  const search = (groupsToSearch: Group[], currentPath: Group[]): void => {
+    for (const group of groupsToSearch) {
+      const groupMatches = testMatcher(group.matcher, account.name);
+
+      if (groupMatches) {
+        deepestMatch = { group, path: [...currentPath, group] };
       }
-    } else {
-      availableTags = [];
-    }
-  }
 
-  /**
-   * Test if an account name matches a matcher (single or multiple RegExps)
-   */
-  function testMatcher(matcher: string | string[] | undefined, accountName: string): boolean {
-    if (!matcher) return false;
-
-    const createRegex = (str: string): RegExp => new RegExp(`^${str}$`);
-
-    if (Array.isArray(matcher)) {
-      return matcher.some((m) => createRegex(m).test(accountName));
-    }
-
-    return createRegex(matcher).test(accountName);
-  }
-
-  /**
-   * Extract tags from account name based on available tag keys
-   */
-  function extractTagsFromName(accountName: string, tagConfigs: TagConfig[]): string[] {
-    const foundTags: string[] = [];
-    for (const tag of tagConfigs) {
-      let matches = false;
-      // Use matcher if provided, otherwise fall back to suffix matching
-      if (tag.matcher) {
-        try {
-          const regex = new RegExp(`^${tag.matcher}$`);
-          matches = regex.test(accountName);
-        } catch {
-          // If regex is invalid, skip this tag
-          matches = false;
-        }
-      } else {
-        const keySuffix = accountName.endsWith(`-${tag.key}`);
-        const nameSuffix = accountName.endsWith(`-${tag.name.toLowerCase()}`);
-        matches = keySuffix || nameSuffix;
-      }
-      if (matches) {
-        foundTags.push(tag.key);
-      }
-    }
-    return foundTags;
-  }
-
-  /**
-   * Recursively collect all account IDs that match any predefined group
-   */
-  function collectMatchedAccountIds(
-    groupsToCheck: PredefinedGroup[],
-    accountsToCheck: Account[]
-  ): Set<string> {
-    const matched = new Set<string>();
-    groupsToCheck.forEach((group) => {
-      accountsToCheck.forEach((account) => {
-        if (testMatcher(group.matcher, account.name)) {
-          matched.add(account.id);
-        }
-      });
+      // Always search children if they exist, regardless of whether parent matched
+      // This allows groups without matchers to be traversed
       if (group.children) {
-        const childMatched = collectMatchedAccountIds(group.children, accountsToCheck);
-        for (const id of childMatched) {
-          matched.add(id);
-        }
+        search(group.children, groupMatches ? [...currentPath, group] : currentPath);
       }
-    });
-    return matched;
-  }
+    }
+  };
+
+  search(groups, []);
+  return deepestMatch;
+}
+
+/**
+ * Build the complete account tree from groups and accounts
+ */
+function buildAccountTree(
+  groups: Group[],
+  accounts: Account[],
+  tagConfigs: TagConfig[]
+): AccountGroupNode[] {
+  // Track which accounts have been placed in groups
+  const placedAccountIds = new Set<string>();
 
   /**
-   * Build tree from predefined groups, placing accounts in their matching groups
+   * Recursively build tree structure from groups
    */
-  function buildGroupTree(groupsToProcess: PredefinedGroup[]): AccountGroupNode[] {
-    // Defensive check: ensure groupsToProcess is an array
-    if (!Array.isArray(groupsToProcess)) {
-      console.error("buildGroupTree received non-array value:", groupsToProcess);
-      // Try to extract groups if it looks like a RemoteConfig object
-      if (
-        typeof groupsToProcess === "object" &&
-        groupsToProcess !== null &&
-        "groups" in groupsToProcess
-      ) {
-        const config = groupsToProcess as Record<string, unknown>;
-        if (Array.isArray(config.groups)) {
-          groupsToProcess = config.groups;
-        } else {
-          return [];
+  const buildGroupNodes = (groupsToProcess: Group[]): AccountGroupNode[] => {
+    return groupsToProcess.map((group) => {
+      // Find all accounts that match this specific group as their deepest match
+      const accountsForThisGroup = accounts.filter((account) => {
+        const deepestMatch = findDeepestMatchingGroup(account, groups);
+        if (!deepestMatch) return false;
+        // Check if this account's deepest match is this specific group
+        const isMatch = deepestMatch.group.key === group.key;
+        if (isMatch) {
+          placedAccountIds.add(account.id);
         }
-      } else {
-        return [];
-      }
-    }
+        return isMatch;
+      });
 
-    return groupsToProcess
-      .map((group) => {
-        // Find all accounts matching this group
-        const matchingAccounts = accounts.filter((account) =>
-          testMatcher(group.matcher, account.name)
-        );
+      const children: (AccountGroupNode | AccountNode)[] = [];
 
-        // Build children: nested groups + matching accounts
-        const children: (AccountGroupNode | AccountNode)[] = [];
-
-        // Add nested groups if they exist
-        if (group.children && group.children.length > 0) {
-          children.push(...buildGroupTree(group.children));
-        }
-
-        // Add matching accounts that aren't already in nested groups
-        const accountsInNestedGroups = new Set<string>();
-        if (group.children) {
-          group.children.forEach((child) => {
-            accounts.forEach((account) => {
-              if (testMatcher(child.matcher, account.name)) {
-                accountsInNestedGroups.add(account.id);
-              }
-            });
-          });
-        }
-
-        matchingAccounts.forEach((account) => {
-          if (!accountsInNestedGroups.has(account.id)) {
-            const accountNode: AccountNode = {
-              key: account.id,
-              data: {
-                ...account,
-                tags: extractTagsFromName(account.name, availableTags),
-              } as Account,
-              icon: "pi pi-box",
-            };
-            children.push(accountNode);
-          }
-        });
-
-        children.sort((a, b) => {
-          const getPrefix = (node: AccountGroupNode | AccountNode): string => {
-            const name = node.data.name;
-            // Remove any tag suffixes from the name for sorting
-            const tagKeysAndNames = availableTags.flatMap((t) => [t.key, t.name.toLowerCase()]);
-            let prefix = name;
-            for (const tag of tagKeysAndNames) {
-              if (prefix.endsWith(`-${tag}`)) {
-                prefix = prefix.slice(0, -(tag.length + 1));
-              }
-            }
-            return prefix;
-          };
-
-          const prefixA = getPrefix(a);
-          const prefixB = getPrefix(b);
-          if (prefixA !== prefixB) return prefixA.localeCompare(prefixB);
-
-          // If prefixes are equal, compare by name
-          return a.data.name.localeCompare(b.data.name);
-        });
-
-        const renderIconSrc = (src: string) => {
-          const iconFunction: IconType<AccountGroupNode> = (options) => {
-            const { ref, iconProps } = options;
-            return <img src={src} {...iconProps} ref={ref} alt="" aria-hidden="true" />;
-          };
-          return iconFunction;
-        };
-
-        // Only include group if it has children or matching accounts
-        if (children.length > 0) {
-          return {
-            key: `group-${group.key}`,
-            data: {
-              name: group.name,
-            },
-            expandedByDefault: group.expandedByDefault ?? false,
-            icon: group.icon ? renderIconSrc(group.icon) : "pi pi-folder",
-            children,
-          };
-        }
-
-        return null;
-      })
-      .filter((group) => group !== null) as AccountGroupNode[];
-  }
-
-  // Build predefined groups
-  const predefinedGroupNodes = buildGroupTree(predefinedGroups);
-
-  // Find accounts that don't match any predefined group
-  const matchedAccountIds = collectMatchedAccountIds(predefinedGroups, accounts);
-  const unmatchedAccounts = accounts.filter((account) => !matchedAccountIds.has(account.id));
-
-  // Group unmatched accounts by first word (prefix)
-  const prefixGroups = new Map<string, Account[]>();
-  unmatchedAccounts.forEach((account) => {
-    const parts = account.name.toLowerCase().split(/[-_\s]/);
-    const prefix = parts.length > 0 && parts[0] ? parts[0] : "other";
-    if (!prefixGroups.has(prefix)) {
-      prefixGroups.set(prefix, []);
-    }
-    const groupAccounts = prefixGroups.get(prefix);
-    if (groupAccounts) {
-      groupAccounts.push(account);
-    }
-  });
-
-  // Convert prefix groups to tree nodes
-  const prefixGroupNodes: AccountGroupNode[] = Array.from(prefixGroups.entries()).map(
-    ([prefix, prefixAccounts]) => {
-      const groupName = prefix.charAt(0).toUpperCase() + prefix.slice(1);
-      return {
-        key: `group-${prefix}`,
-        data: {
-          name: groupName,
-        },
-        children: prefixAccounts.map((account) => ({
+      // Add account nodes
+      accountsForThisGroup.forEach((account) => {
+        const accountNode: AccountNode = {
           key: account.id,
           data: {
             ...account,
-            tags: extractTagsFromName(account.name, availableTags),
-          },
-        })),
+            tags: extractTagsFromName(account.name, tagConfigs),
+          } as Account,
+          icon: "pi pi-box",
+        };
+        children.push(accountNode);
+      });
+
+      // Add nested group nodes recursively
+      if (group.children && group.children.length > 0) {
+        children.push(...buildGroupNodes(group.children));
+      }
+
+      // Sort children by name
+      children.sort((a, b) => a.data.name.localeCompare(b.data.name));
+
+      const renderIconSrc = (src: string) => {
+        const iconFunction: IconType<AccountGroupNode> = (options) => {
+          const { ref, iconProps } = options;
+          return <img src={src} {...iconProps} ref={ref} alt="" aria-hidden="true" />;
+        };
+        return iconFunction;
       };
-    }
+
+      // Include group even if it has no children
+      return {
+        key: `group-${group.key}`,
+        data: {
+          name: group.name,
+        },
+        expandedByDefault: group.expandedByDefault ?? false,
+        icon: group.icon ? renderIconSrc(group.icon) : "pi pi-folder",
+        children: children.length > 0 ? children : undefined,
+      };
+    });
+  };
+
+  // Build groups from configuration
+  const configGroupNodes = buildGroupNodes(groups);
+
+  // Create "other" group for unmatched accounts
+  const unmatchedAccounts = accounts.filter((account) => !placedAccountIds.has(account.id));
+  const otherGroupNode: AccountGroupNode | null =
+    unmatchedAccounts.length > 0
+      ? {
+          key: "group-other",
+          data: { name: "Other" },
+          expandedByDefault: false,
+          icon: "pi pi-folder",
+          children: unmatchedAccounts.map((account) => ({
+            key: account.id,
+            data: {
+              ...account,
+              tags: extractTagsFromName(account.name, tagConfigs),
+            },
+          })),
+        }
+      : null;
+
+  return otherGroupNode ? [...configGroupNodes, otherGroupNode] : configGroupNodes;
+}
+
+/**
+ * Gets the complete account tree from groups and accounts
+ * Accounts are placed in the deepest matching group
+ */
+export function getAccountTree(
+  accounts: Account[],
+  groups: Group[],
+  tagConfigs: TagConfig[] = []
+): AccountGroupNode[] {
+  // Defensive checks
+  if (!Array.isArray(groups)) {
+    console.error("getAccountTree received non-array groups:", groups);
+    groups = [];
+  }
+
+  if (!Array.isArray(tagConfigs)) {
+    console.error("getAccountTree received non-array tagConfigs:", tagConfigs);
+    tagConfigs = [];
+  }
+
+  if (!Array.isArray(accounts)) {
+    console.error("getAccountTree received non-array accounts:", accounts);
+    accounts = [];
+  }
+
+  console.log(
+    "buildAccountTree(groups, accounts, tagConfigs)",
+    buildAccountTree(groups, accounts, tagConfigs)
   );
 
-  console.log("Predefined groups built:", [...predefinedGroupNodes, ...prefixGroupNodes]);
-
-  return [...predefinedGroupNodes, ...prefixGroupNodes];
+  return buildAccountTree(groups, accounts, tagConfigs);
 }
