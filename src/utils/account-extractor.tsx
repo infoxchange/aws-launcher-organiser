@@ -6,6 +6,7 @@ import type { Group, TagConfig } from "./configStore";
  * Extracts and groups AWS accounts from the SSO start page
  */
 
+export type { Group };
 export interface Account {
   id: string;
   name: string;
@@ -59,31 +60,6 @@ export function extractAccounts(): Account[] {
 export interface AccountRole {
   name: string;
   consoleUrl: string;
-}
-
-function waitForElement(parent: Element, selector: string, timeout = 5000): Promise<Element> {
-  return new Promise((resolve, reject) => {
-    const existing = parent.querySelector(selector);
-    if (existing) {
-      resolve(existing);
-      return;
-    }
-
-    const observer = new MutationObserver(() => {
-      const el = parent.querySelector(selector);
-      if (el) {
-        observer.disconnect();
-        resolve(el);
-      }
-    });
-
-    observer.observe(parent, { childList: true, subtree: true });
-
-    setTimeout(() => {
-      observer.disconnect();
-      reject(new Error(`Timeout waiting for ${selector}`));
-    }, timeout);
-  });
 }
 
 /**
@@ -366,7 +342,7 @@ function buildAccountTree(
       children.sort((a, b) => a.data.name.localeCompare(b.data.name));
 
       const renderIconSrc = (src: string) => {
-        const iconFunction: IconType<AccountGroupNode> = (options) => {
+        const iconFunction: IconType<TreeNode> = (options) => {
           const { ref, iconProps } = options;
           return <img src={src} {...iconProps} ref={ref} alt="" aria-hidden="true" />;
         };

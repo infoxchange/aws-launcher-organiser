@@ -7,6 +7,7 @@ import {
   type SortConfig,
   type TagConfig,
 } from "./config-schema";
+import { generateUUID } from "./uuid";
 
 // Re-export for convenience
 export type { Group, RemoteConfig, SortConfig, TagConfig };
@@ -102,7 +103,7 @@ export const useConfigStore = create<ConfigStore>()(
       autoUpdateEnabled: false,
       autoUpdateUrl: "",
       autoUpdateAuthToken: "",
-      setGroups: (groups: Group[]) => set({ groups }),
+      setGroups: (groups: Group[]) => set({ groups: ensureGroupUUIDs(groups) }),
       setTags: (tags: TagConfig[]) => {
         const error = validateTags(tags);
         if (error) {
@@ -119,7 +120,7 @@ export const useConfigStore = create<ConfigStore>()(
       },
       setConfig: (config: RemoteConfig) => {
         set({
-          groups: Array.isArray(config.groups) ? config.groups : defaultGroups,
+          groups: ensureGroupUUIDs(Array.isArray(config.groups) ? config.groups : defaultGroups),
           tags: Array.isArray(config.tags) ? config.tags : defaultTags,
           sortBy: Array.isArray(config.sortBy) ? config.sortBy : defaultSortBy,
         });
@@ -128,7 +129,7 @@ export const useConfigStore = create<ConfigStore>()(
       setAutoUpdateUrl: (url: string) => set({ autoUpdateUrl: url }),
       setAutoUpdateAuthToken: (token: string) => set({ autoUpdateAuthToken: token }),
       resetToDefaults: () =>
-        set({ groups: defaultGroups, tags: defaultTags, sortBy: defaultSortBy }),
+        set({ groups: ensureGroupUUIDs(defaultGroups), tags: defaultTags, sortBy: defaultSortBy }),
       getConfig: () => {
         const state = get();
         return {
@@ -187,7 +188,7 @@ export const useConfigStore = create<ConfigStore>()(
         }
 
         return {
-          groups,
+          groups: ensureGroupUUIDs(groups),
           tags,
           sortBy,
           autoUpdateEnabled: obj.autoUpdateEnabled === true,
@@ -202,4 +203,15 @@ export const useConfigStore = create<ConfigStore>()(
 
 export function getDefaultGroups(): Group[] {
   return defaultGroups;
+}
+
+/**
+ * Ensure all groups (recursively) have UUIDs
+ */
+export function ensureGroupUUIDs(groups: Group[]): Group[] {
+  return groups.map((group) => ({
+    ...group,
+    key: group.key || generateUUID(),
+    children: group.children ? ensureGroupUUIDs(group.children) : undefined,
+  }));
 }

@@ -214,20 +214,25 @@
   .group-content {
     display: flex;
     align-items: center;
+    flex-direction: column;
     gap: 8px;
-    flex-wrap: wrap;
+  }
 
-    &-editable {
-      .group-name,
-      .group-description {
-        cursor: pointer;
-        padding: 2px 6px;
-        border-radius: 3px;
-        transition: background-color 0.2s ease;
+  .group-name-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
 
-        &:hover {
-          background-color: rgba(59, 130, 246, 0.1);
-        }
+    .group-name {
+      flex: 1;
+    }
+
+    .group-edit-button {
+      flex-shrink: 0;
+
+      span.pi {
+        font-size: 1.5rem;
       }
     }
   }
@@ -265,6 +270,21 @@
 
   .add-description-button {
     margin-left: 0;
+  }
+
+  .add-root-group-container {
+    padding: 16px 0 0 0;
+    border-top: 1px solid var(--color-border);
+    margin-top: 8px;
+  }
+
+  .add-root-group-button {
+    margin-left: 0;
+  }
+
+  .add-child-group-button {
+    margin-left: 0;
+    margin-top: 8px;
   }
 }
 

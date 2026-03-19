@@ -20,6 +20,8 @@ import {
 } from "../utils/account-extractor";
 import { type Group, type TagConfig, useConfigStore } from "../utils/configStore";
 import { sortAccountsByConfig } from "../utils/sortAccounts";
+import { generateUUID } from "../utils/uuid";
+import { GroupEditor } from "./GroupEditor";
 import { SettingsDialog } from "./SettingsDialog";
 
 interface NodeTemplateProps {
@@ -27,15 +29,10 @@ interface NodeTemplateProps {
   tags: TagConfig[];
   editMode: boolean;
   editingGroupKey: string | null;
-  editingGroupName: string;
   setEditingGroupKey: (key: string | null) => void;
-  setEditingGroupName: (name: string) => void;
-  editingDescriptionKey: string | null;
-  editingDescription: string;
-  setEditingDescriptionKey: (key: string | null) => void;
-  setEditingDescription: (desc: string) => void;
-  updateGroupName: (groupKey: string, name: string) => void;
-  updateGroupDescription: (groupKey: string, desc: string) => void;
+  updateGroup: (groupKey: string, updatedGroup: Group) => void;
+  addChildGroup: (parentKey: string) => void;
+  deleteGroup: (groupKey: string) => void;
   findGroupByKey: (key: string) => Group | null;
   setNodes: React.Dispatch<React.SetStateAction<AccountGroupNode[]>>;
   enqueueRoleLoad: (accountId: string, execute: () => Promise<void>) => void;
@@ -46,22 +43,18 @@ const NodeTemplate: React.FC<NodeTemplateProps> = ({
   tags,
   editMode,
   editingGroupKey,
-  editingGroupName,
   setEditingGroupKey,
-  setEditingGroupName,
-  editingDescriptionKey,
-  editingDescription,
-  setEditingDescriptionKey,
-  setEditingDescription,
-  updateGroupName,
-  updateGroupDescription,
+  updateGroup,
+  addChildGroup,
+  deleteGroup,
   findGroupByKey,
   setNodes,
   enqueueRoleLoad,
 }) => {
   const [roleLoadError, setRoleLoadError] = useState<string | null>(null);
   const data = node.data;
-  const account = "id" in data ? (data as Account) : null;
+  const isButtonNode = (data as Record<string, unknown>)?.isAddButton === true;
+  const account = !isButtonNode && "id" in data ? (data as Account) : null;
 
   const loadRoles = async () => {
     if (!account) return;
@@ -79,6 +72,23 @@ const NodeTemplate: React.FC<NodeTemplateProps> = ({
     if (!account || account.roles) return;
     enqueueRoleLoad(account.id, loadRoles);
   }, []);
+
+  // Button node - special node for adding child groups
+  if (isButtonNode) {
+    const parentGroupKey = node.data?.parentGroupKey as string;
+    return (
+      <Button
+        label="+ add group"
+        onClick={(e) => {
+          e.stopPropagation();
+          addChildGroup(parentGroupKey);
+        }}
+        text
+        size="small"
+        className="add-child-group-button"
+      />
+    );
+  }
 
   // Account node - has an id property
   if (account) {
@@ -140,33 +150,29 @@ const NodeTemplate: React.FC<NodeTemplateProps> = ({
     );
   }
 
-  // Group node - just name
+  // Group node - render with optional GroupEditor dialog
   const groupKey = node.key as string;
-  const isEditingName = editMode && editingGroupKey === groupKey;
-  const isEditingDesc = editMode && editingDescriptionKey === groupKey;
+  const isEditing = editMode && editingGroupKey === groupKey;
+  const actualGroupKey = groupKey.startsWith("group-") ? groupKey.substring(6) : groupKey;
+  const groupData = findGroupByKey(actualGroupKey);
 
-  if (isEditingName) {
+  if (isEditing && groupData) {
     return (
-      // biome-ignore lint/a11y/useKeyWithClickEvents: Container div only stops event propagation
       // biome-ignore lint/a11y/noStaticElementInteractions: Container div only stops event propagation
+      // biome-ignore lint/a11y/useKeyWithClickEvents: Container div only stops event propagation
       <div className="group-edit-container" onClick={(e) => e.stopPropagation()}>
-        <input
-          type="text"
-          value={editingGroupName}
-          onChange={(e) => setEditingGroupName(e.target.value)}
-          className="group-edit-input"
-          onClick={(e) => e.stopPropagation()}
-          onKeyDown={(e) => {
-            e.stopPropagation();
-            if (e.key === "Enter") {
-              updateGroupName(groupKey, editingGroupName);
-              setEditingGroupKey(null);
-            } else if (e.key === "Escape") {
-              setEditingGroupKey(null);
-            }
+        <GroupEditor
+          group={groupData}
+          onSave={(updatedGroup) => {
+            updateGroup(groupKey, updatedGroup);
           }}
-          onBlur={() => {
-            updateGroupName(groupKey, editingGroupName);
+          onAddChild={() => {
+            addChildGroup(groupKey);
+          }}
+          onDelete={() => {
+            deleteGroup(groupKey);
+          }}
+          onCancel={() => {
             setEditingGroupKey(null);
           }}
         />
@@ -174,99 +180,35 @@ const NodeTemplate: React.FC<NodeTemplateProps> = ({
     );
   }
 
-  if (isEditingDesc) {
-    return (
-      // biome-ignore lint/a11y/useKeyWithClickEvents: Container div only stops event propagation
-      // biome-ignore lint/a11y/noStaticElementInteractions: Container div only stops event propagation
-      <div className="group-edit-container" onClick={(e) => e.stopPropagation()}>
-        {/* biome-ignore lint/a11y/useKeyWithClickEvents: Editing mode */}
-        {/* biome-ignore lint/a11y/noStaticElementInteractions: Editing mode */}
-        <span
-          className="group-name"
-          onClick={(e) => {
-            if (editMode) {
-              e.stopPropagation();
-              setEditingGroupKey(groupKey);
-              setEditingGroupName(data?.name || "");
-            }
-          }}
-        >
-          {data?.name} ({countAllAccounts((node as AccountGroupNode).children ?? [])})
-        </span>
-        <textarea
-          value={editingDescription}
-          onChange={(e) => setEditingDescription(e.target.value)}
-          className="group-description-input"
-          onClick={(e) => e.stopPropagation()}
-          onKeyDown={(e) => {
-            e.stopPropagation();
-            if (e.key === "Escape") {
-              setEditingDescriptionKey(null);
-            }
-          }}
-          onBlur={() => {
-            updateGroupDescription(groupKey, editingDescription);
-            setEditingDescriptionKey(null);
-          }}
-          placeholder="Add description..."
-        />
-      </div>
-    );
-  }
-
-  // Get the actual group data from the groups array
-  const actualGroupKey = groupKey.startsWith("group-") ? groupKey.substring(6) : groupKey;
-  const groupData = findGroupByKey(actualGroupKey);
-
+  // Display group name and description
   return (
     <div className={`group-content ${editMode ? "group-content-editable" : ""}`}>
-      {editMode ? (
-        <button
-          className="group-name"
-          onClick={(e) => {
-            e.stopPropagation();
-            setEditingGroupKey(groupKey);
-            setEditingGroupName(data?.name || "");
-          }}
-          type="button"
-        >
-          {data?.name} ({countAllAccounts((node as AccountGroupNode).children ?? [])})
-        </button>
-      ) : (
-        <div className="group-name">
-          {data?.name} ({countAllAccounts((node as AccountGroupNode).children ?? [])})
-        </div>
-      )}
-      {groupData?.description ? (
-        editMode ? (
-          <button
-            className="group-description"
-            onClick={(e) => {
-              e.stopPropagation();
-              setEditingDescriptionKey(groupKey);
-              setEditingDescription(groupData.description || "");
-            }}
-            type="button"
-          >
-            {groupData.description}
-          </button>
+      <div className="group-name-row">
+        {editMode ? (
+          <>
+            <div className="group-name">
+              {data?.name} ({countAllAccounts((node as AccountGroupNode).children ?? [])})
+            </div>
+            <Button
+              icon="pi pi-pencil"
+              rounded
+              text
+              size="small"
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditingGroupKey(groupKey);
+              }}
+              className="group-edit-button"
+              aria-label="Edit group"
+            />
+          </>
         ) : (
-          <div className="group-description">{groupData.description}</div>
-        )
-      ) : editMode ? (
-        <Button
-          size="small"
-          text
-          label="Add description"
-          icon="pi pi-plus"
-          onClick={(e) => {
-            e.stopPropagation();
-            setEditingDescriptionKey(groupKey);
-            setEditingDescription("");
-          }}
-          className="add-description-button"
-        />
-      ) : null}
+          <div className="group-name">
+            {data?.name} ({countAllAccounts((node as AccountGroupNode).children ?? [])})
+          </div>
+        )}
+      </div>
+      {groupData?.description && <div className="group-description">{groupData.description}</div>}
     </div>
   );
 };
@@ -382,9 +324,6 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
   const [configError, setConfigError] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [editingGroupKey, setEditingGroupKey] = useState<string | null>(null);
-  const [editingGroupName, setEditingGroupName] = useState("");
-  const [editingDescriptionKey, setEditingDescriptionKey] = useState<string | null>(null);
-  const [editingDescription, setEditingDescription] = useState("");
 
   const roleLoadQueue = useRef<{ accountId: string; execute: () => Promise<void> }[]>([]);
   const activeLoads = useRef(0);
@@ -392,6 +331,7 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
 
   const processQueue = useCallback(() => {
     while (activeLoads.current < MAX_CONCURRENT && roleLoadQueue.current.length > 0) {
+      // biome-ignore lint/style/noNonNullAssertion: length check above guarantees non-null
       const entry = roleLoadQueue.current.shift()!;
       activeLoads.current++;
       entry.execute().finally(() => {
@@ -429,15 +369,10 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
       tags={tags}
       editMode={editMode}
       editingGroupKey={editingGroupKey}
-      editingGroupName={editingGroupName}
       setEditingGroupKey={setEditingGroupKey}
-      setEditingGroupName={setEditingGroupName}
-      editingDescriptionKey={editingDescriptionKey}
-      editingDescription={editingDescription}
-      setEditingDescriptionKey={setEditingDescriptionKey}
-      setEditingDescription={setEditingDescription}
-      updateGroupName={updateGroupName}
-      updateGroupDescription={updateGroupDescription}
+      updateGroup={updateGroup}
+      addChildGroup={addChildGroup}
+      deleteGroup={deleteGroup}
       findGroupByKey={findGroupByKey}
       setNodes={setNodes}
       enqueueRoleLoad={enqueueRoleLoad}
@@ -450,29 +385,6 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
       next.has(tagKey) ? next.delete(tagKey) : next.add(tagKey);
       return next;
     });
-  };
-
-  const updateGroupName = (groupKey: string, newName: string) => {
-    // Extract the actual group key (remove "group-" prefix)
-    const actualGroupKey = groupKey.startsWith("group-") ? groupKey.substring(6) : groupKey;
-
-    const updateInGroups = (groupsToUpdate: typeof groups): typeof groups => {
-      return groupsToUpdate.map((group) => {
-        if (group.key === actualGroupKey) {
-          return { ...group, name: newName };
-        }
-        if (group.children) {
-          return {
-            ...group,
-            children: updateInGroups(group.children),
-          };
-        }
-        return group;
-      });
-    };
-
-    const updated = updateInGroups(groups);
-    setGroups(updated);
   };
 
   const findGroupByKey = (actualGroupKey: string): (typeof groups)[0] | null => {
@@ -510,13 +422,13 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
     return search(groups);
   };
 
-  const updateGroupDescription = (groupKey: string, newDescription: string) => {
+  const updateGroup = (groupKey: string, updatedGroup: Group) => {
     const actualGroupKey = groupKey.startsWith("group-") ? groupKey.substring(6) : groupKey;
 
     const updateInGroups = (groupsToUpdate: typeof groups): typeof groups => {
       return groupsToUpdate.map((group) => {
         if (group.key === actualGroupKey) {
-          return { ...group, description: newDescription };
+          return updatedGroup;
         }
         if (group.children) {
           return {
@@ -530,6 +442,157 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
 
     const updated = updateInGroups(groups);
     setGroups(updated);
+    setEditingGroupKey(null);
+  };
+
+  const addChildGroup = (parentKey: string) => {
+    const actualParentKey = parentKey.startsWith("group-") ? parentKey.substring(6) : parentKey;
+
+    const addToGroups = (groupsToUpdate: typeof groups): typeof groups => {
+      return groupsToUpdate.map((group) => {
+        if (group.key === actualParentKey) {
+          const newChild: Group = {
+            key: generateUUID(),
+            name: "New Child Group",
+          };
+          return {
+            ...group,
+            children: [...(group.children || []), newChild],
+          };
+        }
+        if (group.children) {
+          return {
+            ...group,
+            children: addToGroups(group.children),
+          };
+        }
+        return group;
+      });
+    };
+
+    const updated = addToGroups(groups);
+    setGroups(updated);
+  };
+
+  const addRootGroup = () => {
+    const newGroup: Group = {
+      key: generateUUID(),
+      name: "New Group",
+    };
+    setGroups([...groups, newGroup]);
+  };
+
+  const deleteGroup = (groupKey: string) => {
+    const actualGroupKey = groupKey.startsWith("group-") ? groupKey.substring(6) : groupKey;
+
+    const removeFromGroups = (groupsToUpdate: typeof groups): typeof groups => {
+      return groupsToUpdate
+        .filter((group) => group.key !== actualGroupKey)
+        .map((group) => {
+          if (group.children) {
+            return {
+              ...group,
+              children: removeFromGroups(group.children),
+            };
+          }
+          return group;
+        });
+    };
+
+    const updated = removeFromGroups(groups);
+    setGroups(updated);
+    setEditingGroupKey(null);
+  };
+
+  const reorderGroups = (dragKey: string, dropKey: string, dropIndex: number) => {
+    const dragActualKey = dragKey.startsWith("group-") ? dragKey.substring(6) : dragKey;
+    const dropActualKey = dropKey?.startsWith("group-") ? dropKey.substring(6) : dropKey;
+
+    let draggedGroup: Group | null = null;
+
+    // Function to find and remove a group from the tree
+    const extractGroup = (groupsToSearch: typeof groups): typeof groups => {
+      return groupsToSearch.reduce<typeof groups>((acc, group) => {
+        if (group.key === dragActualKey) {
+          draggedGroup = group;
+          return acc; // Don't include this group
+        }
+        if (group.children) {
+          const filteredChildren = extractGroup(group.children);
+          if (filteredChildren.length !== group.children.length) {
+            acc.push({ ...group, children: filteredChildren });
+          } else {
+            acc.push(group);
+          }
+        } else {
+          acc.push(group);
+        }
+        return acc;
+      }, []);
+    };
+
+    // Function to find a group and insert the dragged group into its children
+    const insertGroup = (groupsToSearch: typeof groups): typeof groups => {
+      return groupsToSearch.map((group) => {
+        if (group.key === dropActualKey) {
+          const currentChildren = group.children || [];
+          const newChildren = [...currentChildren];
+          if (draggedGroup) {
+            newChildren.splice(dropIndex < 0 ? newChildren.length : dropIndex, 0, draggedGroup);
+          }
+          return { ...group, children: newChildren };
+        }
+        if (group.children) {
+          return {
+            ...group,
+            children: insertGroup(group.children),
+          };
+        }
+        return group;
+      });
+    };
+
+    // If dropping at root level (no dropKey)
+    if (!dropActualKey) {
+      const updated = extractGroup(groups);
+      if (draggedGroup) {
+        updated.splice(dropIndex < 0 ? updated.length : dropIndex, 0, draggedGroup);
+      }
+      setGroups(updated);
+      return;
+    }
+
+    // Extract the dragged group
+    let updated = extractGroup(groups);
+    // Insert into the drop target
+    updated = insertGroup(updated);
+    setGroups(updated);
+  };
+
+  const injectButtonNodes = (
+    nodes: (AccountGroupNode | AccountNode)[]
+  ): (AccountGroupNode | AccountNode)[] => {
+    if (!editMode) return nodes;
+    return nodes.map((node) => {
+      if ("children" in node) {
+        const groupNode = node as AccountGroupNode;
+        const childrenWithButton: (AccountGroupNode | AccountNode)[] = [
+          ...(groupNode.children || []),
+          {
+            key: `add-button-${groupNode.key}`,
+            data: {
+              isAddButton: true,
+              parentGroupKey: groupNode.key,
+            },
+          } as unknown as AccountNode,
+        ];
+        return {
+          ...groupNode,
+          children: injectButtonNodes(childrenWithButton),
+        } as AccountGroupNode;
+      }
+      return node;
+    });
   };
 
   const visibleNodes = (() => {
@@ -545,6 +608,9 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
 
     // Apply sorting based on sortBy configuration
     filtered = sortAccountsByConfig(filtered, sortBy, tags);
+
+    // Inject "add group" button nodes
+    filtered = injectButtonNodes(filtered) as AccountGroupNode[];
 
     return filtered;
   })();
@@ -618,23 +684,44 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
       {nodes.length === 0 ? (
         <p>No accounts found on this page</p>
       ) : (
-        <Tree
-          value={visibleNodes}
-          nodeTemplate={nodeTemplate}
-          expandedKeys={expandedKeys}
-          onToggle={(e) => {
-            setExpandedKeys(e.value as Record<string, boolean>);
-          }}
-          onNodeClick={({ node }) => {
-            if (!node.children?.length) return; // Only toggle groups
-            const key = node.key as string;
-            setExpandedKeys((prev) => {
-              const { [key]: previousKeyValue, ...otherExpandedKeys } = prev;
-              const isExpanding = !previousKeyValue;
-              return isExpanding ? { ...otherExpandedKeys, [key]: true } : otherExpandedKeys;
-            });
-          }}
-        />
+        <>
+          <Tree
+            value={visibleNodes}
+            nodeTemplate={nodeTemplate}
+            expandedKeys={expandedKeys}
+            onDragDrop={(e) => {
+              const dragKey = e.dragNode?.key as string;
+              const dropKey = e.dropNode?.key as string;
+              // Only allow reordering of groups (keys that start with "group-")
+              if (dragKey?.startsWith("group-") && (dropKey?.startsWith("group-") || !dropKey)) {
+                reorderGroups(dragKey, dropKey, e.dropIndex ?? -1);
+              }
+            }}
+            onToggle={(e) => {
+              setExpandedKeys(e.value as Record<string, boolean>);
+            }}
+            onNodeClick={({ node }) => {
+              if (!node.children?.length) return; // Only toggle groups
+              const key = node.key as string;
+              setExpandedKeys((prev) => {
+                const { [key]: previousKeyValue, ...otherExpandedKeys } = prev;
+                const isExpanding = !previousKeyValue;
+                return isExpanding ? { ...otherExpandedKeys, [key]: true } : otherExpandedKeys;
+              });
+            }}
+          />
+          {editMode && visibleNodes.length > 0 && (
+            <div className="add-root-group-container">
+              <Button
+                label="+ add group"
+                onClick={addRootGroup}
+                size="small"
+                text
+                className="add-root-group-button"
+              />
+            </div>
+          )}
+        </>
       )}
     </div>
   );
