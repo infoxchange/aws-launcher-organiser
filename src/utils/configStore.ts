@@ -4,15 +4,17 @@ import {
   type PredefinedGroup,
   type RemoteConfig,
   RemoteConfigSchema,
+  type SortConfig,
   type TagConfig,
 } from "./config-schema";
 
 // Re-export for convenience
-export type { PredefinedGroup, RemoteConfig, TagConfig };
+export type { PredefinedGroup, RemoteConfig, SortConfig, TagConfig };
 export { RemoteConfigSchema };
 
 const defaultGroups: PredefinedGroup[] = [];
 const defaultTags: TagConfig[] = [];
+const defaultSortBy: SortConfig[] = [];
 
 export const STORAGE_KEY = "aws-sso-config";
 
@@ -32,11 +34,13 @@ const chromeLocalStorage = createJSONStorage(() => ({
 interface ConfigStore {
   groups: PredefinedGroup[];
   tags: TagConfig[];
+  sortBy: SortConfig[];
   autoUpdateEnabled: boolean;
   autoUpdateUrl: string;
   autoUpdateAuthToken: string;
   setGroups: (groups: PredefinedGroup[]) => void;
   setTags: (tags: TagConfig[]) => void;
+  setSortBy: (sortBy: SortConfig[]) => void;
   setConfig: (config: RemoteConfig) => void;
   setAutoUpdateEnabled: (enabled: boolean) => void;
   setAutoUpdateUrl: (url: string) => void;
@@ -64,11 +68,37 @@ const validateTags = (tags: TagConfig[]): string | null => {
   return null;
 };
 
+const validateSortBy = (sortBy: SortConfig[]): string | null => {
+  for (const config of sortBy) {
+    if (!config.type || !config.direction) {
+      return "All sort configs must have a type and direction";
+    }
+    if (!["nameSubstring", "tags"].includes(config.type)) {
+      return `Invalid sort type: ${config.type}`;
+    }
+    if (!(["asc", "desc"] as const).includes(config.direction)) {
+      return `Invalid sort direction: ${config.direction}`;
+    }
+    if (config.type === "nameSubstring") {
+      if (!config.matcher) {
+        return 'Sort config with type "nameSubstring" must have a matcher';
+      }
+      try {
+        new RegExp(config.matcher);
+      } catch (err) {
+        return `Invalid regex for sort matcher: ${err instanceof Error ? err.message : "Unknown error"}`;
+      }
+    }
+  }
+  return null;
+};
+
 export const useConfigStore = create<ConfigStore>()(
   persist(
     (set, get) => ({
       groups: defaultGroups,
       tags: defaultTags,
+      sortBy: defaultSortBy,
       autoUpdateEnabled: false,
       autoUpdateUrl: "",
       autoUpdateAuthToken: "",
@@ -80,22 +110,32 @@ export const useConfigStore = create<ConfigStore>()(
         }
         set({ tags });
       },
+      setSortBy: (sortBy: SortConfig[]) => {
+        const error = validateSortBy(sortBy);
+        if (error) {
+          throw new Error(`Sort config validation failed: ${error}`);
+        }
+        set({ sortBy });
+      },
       setConfig: (config: RemoteConfig) => {
         set({
           groups: Array.isArray(config.groups) ? config.groups : defaultGroups,
           tags: Array.isArray(config.tags) ? config.tags : defaultTags,
+          sortBy: Array.isArray(config.sortBy) ? config.sortBy : defaultSortBy,
         });
       },
       setAutoUpdateEnabled: (enabled: boolean) => set({ autoUpdateEnabled: enabled }),
       setAutoUpdateUrl: (url: string) => set({ autoUpdateUrl: url }),
       setAutoUpdateAuthToken: (token: string) => set({ autoUpdateAuthToken: token }),
-      resetToDefaults: () => set({ groups: defaultGroups, tags: defaultTags }),
+      resetToDefaults: () =>
+        set({ groups: defaultGroups, tags: defaultTags, sortBy: defaultSortBy }),
       getConfig: () => {
         const state = get();
         return {
           version: 1,
           groups: state.groups,
           tags: state.tags.length > 0 ? state.tags : undefined,
+          sortBy: state.sortBy.length > 0 ? state.sortBy : undefined,
         };
       },
     }),
@@ -108,6 +148,7 @@ export const useConfigStore = create<ConfigStore>()(
           return {
             groups: defaultGroups,
             tags: defaultTags,
+            sortBy: defaultSortBy,
             autoUpdateEnabled: false,
             autoUpdateUrl: "",
             autoUpdateAuthToken: "",
@@ -119,6 +160,7 @@ export const useConfigStore = create<ConfigStore>()(
         // Extract groups and tags, handling RemoteConfig format
         let groups: PredefinedGroup[] = defaultGroups;
         let tags: TagConfig[] = defaultTags;
+        let sortBy: SortConfig[] = defaultSortBy;
 
         if ("groups" in obj) {
           if (Array.isArray(obj.groups)) {
@@ -132,6 +174,7 @@ export const useConfigStore = create<ConfigStore>()(
             const nested = obj.groups as Record<string, unknown>;
             groups = Array.isArray(nested.groups) ? nested.groups : defaultGroups;
             tags = Array.isArray(nested.tags) ? nested.tags : defaultTags;
+            sortBy = Array.isArray(nested.sortBy) ? nested.sortBy : defaultSortBy;
           }
         }
 
@@ -139,9 +182,14 @@ export const useConfigStore = create<ConfigStore>()(
           tags = obj.tags;
         }
 
+        if ("sortBy" in obj && Array.isArray(obj.sortBy)) {
+          sortBy = obj.sortBy;
+        }
+
         return {
           groups,
           tags,
+          sortBy,
           autoUpdateEnabled: obj.autoUpdateEnabled === true,
           autoUpdateUrl: typeof obj.autoUpdateUrl === "string" ? obj.autoUpdateUrl : "",
           autoUpdateAuthToken:

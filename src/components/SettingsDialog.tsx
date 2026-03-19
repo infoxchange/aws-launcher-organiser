@@ -7,8 +7,9 @@ import { Message } from "primereact/message";
 import { Password } from "primereact/password";
 import type React from "react";
 import { useState } from "react";
-import type { TagConfig } from "../utils/configStore";
+import type { SortConfig, TagConfig } from "../utils/configStore";
 import { RemoteConfigSchema, useConfigStore } from "../utils/configStore";
+import { SortingSettings } from "./SortingSettings";
 import { TagSettings } from "./TagSettings";
 import "./SettingsDialog.css";
 
@@ -40,6 +41,24 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   });
   const [matcherError, setMatcherError] = useState<string | null>(null);
 
+  // State for sorting settings
+  const [sortMatcherError, setSortMatcherError] = useState<string | null>(null);
+
+  const validateSortMatcher = (matcher: string): boolean => {
+    if (!matcher) {
+      setSortMatcherError(null);
+      return true;
+    }
+    try {
+      new RegExp(matcher);
+      setSortMatcherError(null);
+      return true;
+    } catch (err) {
+      setSortMatcherError(`Invalid regex: ${err instanceof Error ? err.message : "Unknown error"}`);
+      return false;
+    }
+  };
+
   // Draft state — snapshotted from the store when the dialog opens, committed on Save
   const [draftAutoUpdateEnabled, setDraftAutoUpdateEnabled] = useState(false);
   const [draftAutoUpdateUrl, setDraftAutoUpdateUrl] = useState("");
@@ -66,6 +85,26 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
     try {
       const parsed = JSON.parse(jsonConfig);
       const updated = { ...parsed, tags: newTags.length > 0 ? newTags : undefined };
+      onConfigChange(JSON.stringify(updated, null, 2));
+    } catch {
+      // jsonConfig is currently invalid JSON; can't update it
+    }
+  };
+
+  // Parse sortBy out of the draft jsonConfig so SortingSettings always reflects the textarea
+  const getSortByFromConfig = (): SortConfig[] => {
+    try {
+      const parsed = JSON.parse(jsonConfig);
+      return Array.isArray(parsed.sortBy) ? parsed.sortBy : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const handleSortByChange = (newSortBy: SortConfig[]) => {
+    try {
+      const parsed = JSON.parse(jsonConfig);
+      const updated = { ...parsed, sortBy: newSortBy.length > 0 ? newSortBy : undefined };
       onConfigChange(JSON.stringify(updated, null, 2));
     } catch {
       // jsonConfig is currently invalid JSON; can't update it
@@ -225,6 +264,16 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                 matcherError={matcherError}
                 onMatcherErrorChange={setMatcherError}
                 onValidateMatcher={validateMatcherRegex}
+              />
+
+              <hr className="section-divider" />
+
+              <SortingSettings
+                sortBy={getSortByFromConfig()}
+                onSortByChange={handleSortByChange}
+                matcherError={sortMatcherError}
+                onMatcherErrorChange={setSortMatcherError}
+                onValidateMatcher={validateSortMatcher}
               />
             </>
           )}

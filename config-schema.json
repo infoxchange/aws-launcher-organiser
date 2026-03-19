@@ -35,6 +35,27 @@
         "required": ["key", "name", "colour"],
         "additionalProperties": false
       }
+    },
+    "sortBy": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["nameSubstring", "tags"]
+          },
+          "direction": {
+            "type": "string",
+            "enum": ["asc", "desc"]
+          },
+          "matcher": {
+            "type": "string"
+          }
+        },
+        "required": ["type", "direction"],
+        "additionalProperties": false
+      }
     }
   },
   "required": ["version", "groups"],

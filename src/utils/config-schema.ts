@@ -7,6 +7,12 @@ export interface TagConfig {
   matcher?: string;
 }
 
+export interface SortConfig {
+  type: "nameSubstring" | "tags";
+  direction: "asc" | "desc";
+  matcher?: string;
+}
+
 export interface PredefinedGroup {
   key: string;
   name: string;
@@ -21,6 +27,12 @@ export const TagConfigSchema: z.ZodType<TagConfig> = z.object({
   key: z.string(),
   name: z.string(),
   colour: z.string(),
+  matcher: z.string().optional(),
+});
+
+export const SortConfigSchema: z.ZodType<SortConfig> = z.object({
+  type: z.enum(["nameSubstring", "tags"]),
+  direction: z.enum(["asc", "desc"]),
   matcher: z.string().optional(),
 });
 
@@ -41,6 +53,7 @@ export const RemoteConfigSchema = z.object({
   version: z.number(),
   groups: z.array(PredefinedGroupSchema),
   tags: z.array(TagConfigSchema).optional(),
+  sortBy: z.array(SortConfigSchema).optional(),
 });
 
 export type RemoteConfig = z.infer<typeof RemoteConfigSchema>;

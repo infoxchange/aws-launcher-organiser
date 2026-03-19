@@ -18,6 +18,7 @@ import {
   groupAccountsByPattern,
 } from "../utils/account-extractor";
 import { useConfigStore } from "../utils/configStore";
+import { sortAccountsByConfig } from "../utils/sortAccounts";
 import { SettingsDialog } from "./SettingsDialog";
 
 export interface AccountTreeTableProps {
@@ -141,7 +142,7 @@ function loadRolesForExpandedGroups(
 }
 
 export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
-  const { groups, setGroups, tags, autoUpdateEnabled, getConfig } = useConfigStore();
+  const { groups, setGroups, tags, autoUpdateEnabled, getConfig, sortBy } = useConfigStore();
   const [nodes, setNodes] = useState<AccountGroupNode[]>([]);
   const [expandedKeys, setExpandedKeys] = useState<Record<string, boolean>>({});
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
@@ -481,6 +482,12 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
     if (searchQuery.trim()) {
       filtered = searchFilterNodes(filtered, searchQuery) as AccountGroupNode[];
     }
+
+    console.log("___SSS", JSON.parse(JSON.stringify(filtered, null, 2)));
+
+    // Apply sorting based on sortBy configuration
+    filtered = sortAccountsByConfig(filtered, sortBy, tags);
+    console.log("___SSS2", JSON.parse(JSON.stringify(filtered, null, 2)));
 
     return filtered;
   })();
