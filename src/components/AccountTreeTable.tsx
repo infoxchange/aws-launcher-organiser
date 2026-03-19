@@ -325,6 +325,12 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
   const [editMode, setEditMode] = useState(false);
   const [editingGroupKey, setEditingGroupKey] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (autoUpdateEnabled) {
+      setEditMode(false);
+    }
+  }, [autoUpdateEnabled]);
+
   const roleLoadQueue = useRef<{ accountId: string; execute: () => Promise<void> }[]>([]);
   const activeLoads = useRef(0);
   const MAX_CONCURRENT = 3;
