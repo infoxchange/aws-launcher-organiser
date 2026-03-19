@@ -29,7 +29,17 @@
             "type": "string"
           },
           "matcher": {
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ]
           }
         },
         "required": ["key", "name", "colour"],

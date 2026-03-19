@@ -240,10 +240,11 @@ function extractTagsFromName(accountName: string, tagConfigs: TagConfig[]): stri
     // Use matcher if provided, otherwise fall back to suffix matching
     if (tag.matcher) {
       try {
-        const pattern =
-          tag.matcher.includes("^") || tag.matcher.includes("$") ? tag.matcher : `^${tag.matcher}$`;
-        const regex = new RegExp(pattern);
-        matches = regex.test(accountName);
+        const matchers = Array.isArray(tag.matcher) ? tag.matcher : [tag.matcher];
+        matches = matchers.some((m) => {
+          const pattern = m.includes("^") || m.includes("$") ? m : `^${m}$`;
+          return new RegExp(pattern).test(accountName);
+        });
       } catch {
         // If regex is invalid, skip this tag
         matches = false;

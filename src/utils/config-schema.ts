@@ -4,7 +4,7 @@ export interface TagConfig {
   key: string;
   name: string;
   colour: string;
-  matcher?: string;
+  matcher?: string | string[];
 }
 
 export interface SortConfig {
@@ -27,7 +27,7 @@ export const TagConfigSchema: z.ZodType<TagConfig> = z.object({
   key: z.string(),
   name: z.string(),
   colour: z.string(),
-  matcher: z.string().optional(),
+  matcher: z.union([z.string(), z.array(z.string())]).optional(),
 });
 
 export const SortConfigSchema: z.ZodType<SortConfig> = z.object({

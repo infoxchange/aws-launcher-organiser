@@ -1,6 +1,7 @@
 import { Button } from "primereact/button";
 import { ColorPicker } from "primereact/colorpicker";
 import { InputText } from "primereact/inputtext";
+import { InputTextarea } from "primereact/inputtextarea";
 import type React from "react";
 import { useRef, useState } from "react";
 import type { TagConfig } from "../utils/configStore";
@@ -20,64 +21,73 @@ export const TagFormFields: React.FC<TagFormFieldsProps> = ({
   onMatcherValidate,
   matcherError,
   idPrefix,
-}) => (
-  <div className="form-column">
-    <div className="form-group">
-      <label htmlFor={`${idPrefix}-key`}>Key</label>
-      <InputText
-        id={`${idPrefix}-key`}
-        value={tag.key}
-        onChange={(e) => onTagChange({ ...tag, key: e.target.value })}
-        placeholder="e.g., prod"
-      />
-    </div>
-    <div className="form-group">
-      <label htmlFor={`${idPrefix}-name`}>Name</label>
-      <InputText
-        id={`${idPrefix}-name`}
-        value={tag.name}
-        onChange={(e) => onTagChange({ ...tag, name: e.target.value })}
-        placeholder="e.g., Production"
-      />
-    </div>
-    <div className="form-group">
-      <label htmlFor={`${idPrefix}-colour`}>Colour</label>
-      <div className="colour-input-group">
-        <ColorPicker
-          value={tag.colour.replace(/^#/, "")}
-          onChange={(e) => onTagChange({ ...tag, colour: `#${e.value as string}` })}
-          inline
-        />
+}) => {
+  const toMatcherText = (matcher: TagConfig["matcher"]) =>
+    Array.isArray(matcher) ? matcher.join("\n") : (matcher ?? "");
+
+  const [matcherText, setMatcherText] = useState(() => toMatcherText(tag.matcher));
+
+  return (
+    <div className="form-column">
+      <div className="form-group">
+        <label htmlFor={`${idPrefix}-key`}>Key</label>
         <InputText
-          value={tag.colour}
-          onChange={(e) => onTagChange({ ...tag, colour: e.target.value })}
-          placeholder="#000000"
-          className="hex-input"
+          id={`${idPrefix}-key`}
+          value={tag.key}
+          onChange={(e) => onTagChange({ ...tag, key: e.target.value })}
+          placeholder="e.g., prod"
         />
       </div>
+      <div className="form-group">
+        <label htmlFor={`${idPrefix}-name`}>Name</label>
+        <InputText
+          id={`${idPrefix}-name`}
+          value={tag.name}
+          onChange={(e) => onTagChange({ ...tag, name: e.target.value })}
+          placeholder="e.g., Production"
+        />
+      </div>
+      <div className="form-group">
+        <label htmlFor={`${idPrefix}-colour`}>Colour</label>
+        <div className="colour-input-group">
+          <ColorPicker
+            value={tag.colour.replace(/^#/, "")}
+            onChange={(e) => onTagChange({ ...tag, colour: `#${e.value as string}` })}
+            inline
+          />
+          <InputText
+            value={tag.colour}
+            onChange={(e) => onTagChange({ ...tag, colour: e.target.value })}
+            placeholder="#000000"
+            className="hex-input"
+          />
+        </div>
+      </div>
+      <div className="form-group">
+        <label htmlFor={`${idPrefix}-matcher`}>Matchers (optional, one per line)</label>
+        <InputTextarea
+          id={`${idPrefix}-matcher`}
+          value={matcherText}
+          onChange={(e) => {
+            const raw = e.target.value;
+            setMatcherText(raw);
+            const lines = raw
+              .split("\n")
+              .map((l) => l.trim())
+              .filter(Boolean);
+            onTagChange({ ...tag, matcher: lines.length > 1 ? lines : lines[0] });
+            onMatcherValidate(raw);
+          }}
+          placeholder={"e.g., prod-.*\n.*-production"}
+          rows={3}
+          autoResize
+          className={matcherError ? "p-invalid" : ""}
+        />
+        {matcherError && <small className="matcher-error">{matcherError}</small>}
+      </div>
     </div>
-    <div className="form-group">
-      <label htmlFor={`${idPrefix}-matcher`}>Matcher (optional)</label>
-      <InputText
-        id={`${idPrefix}-matcher`}
-        value={tag.matcher || ""}
-        onChange={(e) => {
-          const value = e.target.value || undefined;
-          onTagChange({ ...tag, matcher: value });
-          if (value) {
-            onMatcherValidate(value);
-          } else {
-            // Clear error when matcher is cleared
-            onMatcherValidate("");
-          }
-        }}
-        placeholder="e.g., prod-.*"
-        className={matcherError ? "p-invalid" : ""}
-      />
-      {matcherError && <small className="matcher-error">{matcherError}</small>}
-    </div>
-  </div>
-);
+  );
+};
 
 export interface TagSettingsProps {
   tags: TagConfig[];
@@ -108,7 +118,10 @@ export const TagSettings: React.FC<TagSettingsProps> = ({
 }) => {
   const handleAddTag = () => {
     if (!editingTag.key || !editingTag.name) return;
-    if (editingTag.matcher && !onValidateMatcher(editingTag.matcher)) return;
+    const matcherText = Array.isArray(editingTag.matcher)
+      ? editingTag.matcher.join("\n")
+      : (editingTag.matcher ?? "");
+    if (matcherText && !onValidateMatcher(matcherText)) return;
     const newTags = [...tags, editingTag];
     onTagsChange(newTags);
     onEditingTagChange({ key: "", name: "", colour: "#000000" });
@@ -118,7 +131,10 @@ export const TagSettings: React.FC<TagSettingsProps> = ({
 
   const handleSaveTag = (index: number) => {
     if (!editingTag.key || !editingTag.name) return;
-    if (editingTag.matcher && !onValidateMatcher(editingTag.matcher)) return;
+    const matcherText = Array.isArray(editingTag.matcher)
+      ? editingTag.matcher.join("\n")
+      : (editingTag.matcher ?? "");
+    if (matcherText && !onValidateMatcher(matcherText)) return;
     const newTags = [...tags];
     newTags[index] = editingTag;
     onTagsChange(newTags);
@@ -233,7 +249,11 @@ export const TagSettings: React.FC<TagSettingsProps> = ({
                       <div className="tag-info">
                         <div className="tag-name">{tag.name}</div>
                         <div className="tag-key">{tag.key}</div>
-                        {tag.matcher && <div className="tag-matcher">{tag.matcher}</div>}
+                        {tag.matcher && (
+                          <div className="tag-matcher">
+                            {Array.isArray(tag.matcher) ? tag.matcher.join(", ") : tag.matcher}
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="tag-actions">

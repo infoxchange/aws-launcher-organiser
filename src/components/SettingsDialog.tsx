@@ -111,19 +111,27 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
     }
   };
 
-  const validateMatcherRegex = (matcher: string): boolean => {
-    if (!matcher) {
+  const validateMatcherRegex = (matcherText: string): boolean => {
+    if (!matcherText.trim()) {
       setMatcherError(null);
       return true;
     }
-    try {
-      new RegExp(`^${matcher}$`);
-      setMatcherError(null);
-      return true;
-    } catch (err) {
-      setMatcherError(`Invalid regex: ${err instanceof Error ? err.message : "Unknown error"}`);
-      return false;
+    const lines = matcherText
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+    for (const line of lines) {
+      try {
+        new RegExp(`^${line}$`);
+      } catch (err) {
+        setMatcherError(
+          `Invalid regex "${line}": ${err instanceof Error ? err.message : "Unknown error"}`
+        );
+        return false;
+      }
     }
+    setMatcherError(null);
+    return true;
   };
 
   const runConnectionTest = async () => {
