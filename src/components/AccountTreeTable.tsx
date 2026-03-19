@@ -372,16 +372,42 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
 
   const loadRolesForChildren = (groupNode: TreeNode) => {
     const children = (groupNode as AccountGroupNode).children ?? [];
-    for (const child of children) {
-      if ("id" in child.data && !(child.data as Account).roles) {
+    (async () => {
+      const accountsToLoad = children.filter(
+        (child) => "id" in child.data && !(child.data as Account).roles
+      );
+
+      // Maintain a queue and load up to 3 in parallel
+      // As soon as one finishes, start the next one
+      const queue = [...accountsToLoad];
+      const MAX_CONCURRENT = 3;
+
+      const processNext = async () => {
+        if (queue.length === 0) return;
+
+        const child = queue.shift()!;
         const account = child.data as Account;
-        getAccountRoles(account.id)
-          .then((roles) => {
-            setNodes((prev) => setAccountRoles(prev, account.id, roles));
-          })
-          .catch(console.error);
+
+        try {
+          const roles = await getAccountRoles(account.id);
+          setNodes((prev) => setAccountRoles(prev, account.id, roles));
+        } catch (error) {
+          console.error(error);
+        }
+
+        // After this finishes, start the next one
+        if (queue.length > 0) {
+          await processNext();
+        }
+      };
+
+      // Start up to 3 concurrent workers
+      const workers = [];
+      for (let i = 0; i < Math.min(MAX_CONCURRENT, accountsToLoad.length); i++) {
+        workers.push(processNext());
       }
-    }
+      await Promise.all(workers);
+    })();
   };
 
   const toggleTag = (tagKey: string) => {
@@ -565,18 +591,49 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
           value={visibleNodes}
           nodeTemplate={nodeTemplate}
           expandedKeys={expandedKeys}
-          onToggle={(e) => setExpandedKeys(e.value)}
+          onToggle={(e) => {
+            const newExpandedKeys = e.value as Record<string, boolean>;
+            // Find which keys were newly expanded
+            for (const key of Object.keys(newExpandedKeys)) {
+              if (!expandedKeys[key]) {
+                // This key was just expanded, find and load roles for the node
+                const findNodeByKey = (
+                  nodes: (AccountGroupNode | AccountNode)[],
+                  targetKey: string
+                ): TreeNode | null => {
+                  for (const node of nodes) {
+                    if (node.key === targetKey) return node;
+                    if (node.children) {
+                      const found = findNodeByKey(
+                        node.children as (AccountGroupNode | AccountNode)[],
+                        targetKey
+                      );
+                      if (found) return found;
+                    }
+                  }
+                  return null;
+                };
+                const expandedNode = findNodeByKey(visibleNodes, key);
+                if (expandedNode) {
+                  loadRolesForChildren(expandedNode);
+                }
+              }
+            }
+            setExpandedKeys(newExpandedKeys);
+          }}
           onNodeClick={({ node }) => {
             if (!node.children?.length) return; // Only toggle groups
             const key = node.key as string;
             setExpandedKeys((prev) => {
               const { [key]: previousKeyValue, ...otherExpandedKeys } = prev;
-              if (previousKeyValue === true) {
-                return otherExpandedKeys;
-              } else {
+              const isExpanding = !previousKeyValue;
+              const newKeys = isExpanding
+                ? { ...otherExpandedKeys, [key]: true }
+                : otherExpandedKeys;
+              if (isExpanding) {
                 loadRolesForChildren(node);
-                return { ...otherExpandedKeys, [key]: true };
               }
+              return newKeys;
             });
           }}
         />
