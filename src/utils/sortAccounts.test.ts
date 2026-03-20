@@ -18,7 +18,7 @@ describe("sortAccountsByConfig", () => {
       const account2 = createAccountNode("456", "Account A");
       const group = createGroupNode("group-1", "Test Group", [account1, account2]);
 
-      const result = sortAccountsByConfig([group], [], []);
+      const result = sortAccountsByConfig([group], [], []) as AccountGroupNode[];
 
       expect(result[0].children).toEqual([account1, account2]);
     });
@@ -28,7 +28,7 @@ describe("sortAccountsByConfig", () => {
       const account2 = createAccountNode("456", "Account A");
       const group = createGroupNode("group-1", "Test Group", [account1, account2]);
 
-      const result = sortAccountsByConfig([group], undefined, []);
+      const result = sortAccountsByConfig([group], undefined, []) as AccountGroupNode[];
 
       expect(result[0].children).toEqual([account1, account2]);
     });
@@ -57,7 +57,7 @@ describe("sortAccountsByConfig", () => {
 
       const sortConfig: SortConfig[] = [{ type: "tags", direction: "asc" }];
 
-      const result = sortAccountsByConfig([group], sortConfig, tags);
+      const result = sortAccountsByConfig([group], sortConfig, tags) as AccountGroupNode[];
       const sortedChildren: TestNode[] = result[0].children ?? [];
 
       expect(getNodeId(sortedChildren[0])).toBe("222"); // dev
@@ -80,7 +80,7 @@ describe("sortAccountsByConfig", () => {
 
       const sortConfig: SortConfig[] = [{ type: "tags", direction: "asc" }];
 
-      const result = sortAccountsByConfig([group], sortConfig, tags);
+      const result = sortAccountsByConfig([group], sortConfig, tags) as AccountGroupNode[];
       const sortedChildren: TestNode[] = result[0].children ?? [];
 
       // account1 has tags [dev, uat] → first matching is dev (index 0)
@@ -103,7 +103,7 @@ describe("sortAccountsByConfig", () => {
 
       const sortConfig: SortConfig[] = [{ type: "tags", direction: "asc" }];
 
-      const result = sortAccountsByConfig([group], sortConfig, tags);
+      const result = sortAccountsByConfig([group], sortConfig, tags) as AccountGroupNode[];
       const sortedChildren: TestNode[] = result[0].children ?? [];
 
       expect(getNodeId(sortedChildren[0])).toBe("111"); // with tag
@@ -134,7 +134,7 @@ describe("sortAccountsByConfig", () => {
 
       const sortConfig: SortConfig[] = [{ type: "tags", direction: "desc" }];
 
-      const result = sortAccountsByConfig([group], sortConfig, tags);
+      const result = sortAccountsByConfig([group], sortConfig, tags) as AccountGroupNode[];
       const sortedChildren: TestNode[] = result[0].children ?? [];
 
       expect(getNodeId(sortedChildren[0])).toBe("444"); // prod (index 3)
@@ -156,7 +156,7 @@ describe("sortAccountsByConfig", () => {
 
       const sortConfig: SortConfig[] = [{ type: "tags", direction: "desc" }];
 
-      const result = sortAccountsByConfig([group], sortConfig, tags);
+      const result = sortAccountsByConfig([group], sortConfig, tags) as AccountGroupNode[];
       const sortedChildren: TestNode[] = result[0].children ?? [];
 
       // With tag should come first, without tag at end (accounts without tags get MAX_VALUE)
@@ -177,7 +177,7 @@ describe("sortAccountsByConfig", () => {
         { type: "nameSubstring", direction: "asc", matcher: "^(\\w+)-" },
       ];
 
-      const result = sortAccountsByConfig([group], sortConfig, []);
+      const result = sortAccountsByConfig([group], sortConfig, []) as AccountGroupNode[];
       const sortedChildren: TestNode[] = result[0].children ?? [];
 
       expect(getNodeId(sortedChildren[0])).toBe("222"); // dev
@@ -196,7 +196,7 @@ describe("sortAccountsByConfig", () => {
         { type: "nameSubstring", direction: "asc", matcher: "account-\\w+" },
       ];
 
-      const result = sortAccountsByConfig([group], sortConfig, []);
+      const result = sortAccountsByConfig([group], sortConfig, []) as AccountGroupNode[];
       const sortedChildren: TestNode[] = result[0].children ?? [];
 
       // Sorted by locale comparison of "account-xyz", "account-abc", "account-mno"
@@ -215,7 +215,7 @@ describe("sortAccountsByConfig", () => {
         { type: "nameSubstring", direction: "asc", matcher: "^(\\w+)-account$" },
       ];
 
-      const result = sortAccountsByConfig([group], sortConfig, []);
+      const result = sortAccountsByConfig([group], sortConfig, []) as AccountGroupNode[];
       const sortedChildren: TestNode[] = result[0].children ?? [];
 
       expect(getNodeId(sortedChildren[0])).toBe("111"); // matches pattern
@@ -235,7 +235,7 @@ describe("sortAccountsByConfig", () => {
         { type: "nameSubstring", direction: "desc", matcher: "^(\\w+)-" },
       ];
 
-      const result = sortAccountsByConfig([group], sortConfig, []);
+      const result = sortAccountsByConfig([group], sortConfig, []) as AccountGroupNode[];
       const sortedChildren: TestNode[] = result[0].children ?? [];
 
       expect(getNodeId(sortedChildren[0])).toBe("333"); // test
@@ -275,7 +275,7 @@ describe("sortAccountsByConfig", () => {
         },
       ];
 
-      const result = sortAccountsByConfig([group], sortConfig, tags);
+      const result = sortAccountsByConfig([group], sortConfig, tags) as AccountGroupNode[];
       const sortedChildren: TestNode[] = result[0].children ?? [];
 
       // All dev accounts should come before test accounts
@@ -305,7 +305,7 @@ describe("sortAccountsByConfig", () => {
 
       const sortConfig: SortConfig[] = [{ type: "tags", direction: "asc" }];
 
-      const result = sortAccountsByConfig([group1, group2], sortConfig, tags);
+      const result = sortAccountsByConfig([group1, group2], sortConfig, tags) as AccountGroupNode[];
 
       const sortedGroup1: TestNode[] = result[0].children ?? [];
       const sortedGroup2: TestNode[] = result[1].children ?? [];
@@ -329,7 +329,7 @@ describe("sortAccountsByConfig", () => {
 
       const sortConfig: SortConfig[] = [{ type: "tags", direction: "asc" }];
 
-      const result = sortAccountsByConfig([group], sortConfig, []);
+      const result = sortAccountsByConfig([group], sortConfig, []) as AccountGroupNode[];
 
       // Should maintain original order when no tags config
       expect(result[0].children).toEqual([account1, account2]);
@@ -340,7 +340,7 @@ describe("sortAccountsByConfig", () => {
 
       const sortConfig: SortConfig[] = [{ type: "tags", direction: "asc" }];
 
-      const result = sortAccountsByConfig([group], sortConfig, []);
+      const result = sortAccountsByConfig([group], sortConfig, []) as AccountGroupNode[];
 
       expect(result[0].children).toEqual([]);
     });
@@ -355,7 +355,7 @@ describe("sortAccountsByConfig", () => {
         { type: "nameSubstring", direction: "asc", matcher: "[invalid(regex" },
       ];
 
-      const result = sortAccountsByConfig([group], sortConfig, []);
+      const result = sortAccountsByConfig([group], sortConfig, []) as AccountGroupNode[];
       expect(result[0].children).toEqual([account1, account2]);
     });
   });
@@ -384,7 +384,7 @@ describe("sortAccountsByConfig", () => {
 
       const sortConfig: SortConfig[] = [{ type: "tags", direction: "asc" }];
 
-      const result = sortAccountsByConfig([mainGroup], sortConfig, tags);
+      const result = sortAccountsByConfig([mainGroup], sortConfig, tags) as AccountGroupNode[];
 
       // Main group still contains the nested group
       const resultContents: TestNode[] = result[0].children ?? [];
@@ -417,7 +417,7 @@ describe("sortAccountsByConfig", () => {
 
       const sortConfig: SortConfig[] = [{ type: "tags", direction: "asc" }];
 
-      const result = sortAccountsByConfig([midGroup], sortConfig, tags);
+      const result = sortAccountsByConfig([midGroup], sortConfig, tags) as AccountGroupNode[];
 
       // Check mid-level accounts are sorted
       const resultChildren = result[0].children ?? [];
@@ -465,7 +465,7 @@ describe("sortAccountsByConfig", () => {
 
       const sortConfig: SortConfig[] = [{ type: "tags", direction: "asc" }];
 
-      const result = sortAccountsByConfig([mainGroup], sortConfig, tags);
+      const result = sortAccountsByConfig([mainGroup], sortConfig, tags) as AccountGroupNode[];
       const resultChildren = result[0].children ?? [];
 
       // Check first nested group is sorted

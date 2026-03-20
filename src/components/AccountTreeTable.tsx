@@ -35,7 +35,7 @@ interface NodeTemplateProps {
   addRootGroup: () => void;
   deleteGroup: (groupKey: string) => void;
   findGroupByKey: (key: string) => Group | null;
-  setNodes: React.Dispatch<React.SetStateAction<AccountGroupNode[]>>;
+  setNodes: React.Dispatch<React.SetStateAction<(AccountGroupNode | AccountNode)[]>>;
   enqueueRoleLoad: (accountId: string, execute: () => Promise<void>) => void;
 }
 
@@ -303,27 +303,30 @@ function countAllAccounts(nodes: (AccountGroupNode | AccountNode)[]): number {
 }
 
 function setAccountRoles(
-  nodes: AccountGroupNode[],
+  nodes: (AccountGroupNode | AccountNode)[],
   accountId: string,
   roles: AccountRole[]
-): AccountGroupNode[] {
-  return nodes.map((node) => ({
-    ...node,
-    children: node.children?.map((child) => {
-      if ("id" in child.data && (child.data as Account).id === accountId) {
-        return { ...child, data: { ...child.data, roles } } as AccountNode;
-      }
-      if ("children" in child) {
-        return setAccountRoles([child as AccountGroupNode], accountId, roles)[0];
-      }
-      return child;
-    }),
-  }));
+): (AccountGroupNode | AccountNode)[] {
+  return nodes.map((node) => {
+    // Check if this is an account node with matching ID
+    if ("id" in node.data && (node.data as Account).id === accountId) {
+      return { ...node, data: { ...node.data, roles } } as AccountNode;
+    }
+    // Check if this is a group node with children
+    if ("children" in node) {
+      const groupNode = node as AccountGroupNode;
+      return {
+        ...groupNode,
+        children: setAccountRoles(groupNode.children ?? [], accountId, roles),
+      };
+    }
+    return node;
+  });
 }
 
 export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
   const { groups, setGroups, tags, autoUpdateEnabled, getConfig, sortBy } = useConfigStore();
-  const [nodes, setNodes] = useState<AccountGroupNode[]>([]);
+  const [nodes, setNodes] = useState<(AccountGroupNode | AccountNode)[]>([]);
   const [expandedKeys, setExpandedKeys] = useState<Record<string, boolean>>({});
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -369,7 +372,7 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
     const accounts = extractAccounts();
     const grouped = getAccountTree(accounts, groups, tags);
     setNodes(grouped);
-    setExpandedKeys(collectExpandedKeys(grouped));
+    setExpandedKeys((prev) => ({ ...collectExpandedKeys(grouped), ...prev }));
   }, [groups, tags]);
 
   useEffect(() => {
@@ -618,6 +621,8 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
             isAddButton: true,
             parentGroupKey: groupNode.key,
           },
+          draggable: false,
+          droppable: false,
         } as unknown as AccountNode;
 
         // Combine: groups, buttons (existing + new), accounts
@@ -645,14 +650,14 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
     }
 
     if (searchQuery.trim()) {
-      filtered = searchFilterNodes(filtered, searchQuery) as AccountGroupNode[];
+      filtered = searchFilterNodes(filtered, searchQuery);
     }
 
     // Apply sorting based on sortBy configuration
     filtered = sortAccountsByConfig(filtered, sortBy, tags, groups);
 
     // Inject "add group" button nodes
-    filtered = injectButtonNodes(filtered) as AccountGroupNode[];
+    filtered = injectButtonNodes(filtered);
 
     // Add root-level button node when in edit mode
     if (editMode) {
@@ -662,8 +667,16 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
           isAddButton: true,
           parentGroupKey: null,
         },
-      } as unknown as AccountGroupNode;
-      filtered = [...filtered, rootButton];
+        draggable: false,
+        droppable: false,
+      } as unknown as AccountGroupNode | AccountNode;
+
+      // Separate groups and accounts at root level
+      const rootGroups = filtered.filter((node) => "children" in node);
+      const rootAccounts = filtered.filter((node) => "id" in node.data);
+
+      // Insert button between groups and accounts
+      filtered = [...rootGroups, rootButton, ...rootAccounts];
     }
 
     return filtered;

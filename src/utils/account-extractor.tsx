@@ -140,12 +140,13 @@ export async function getAccountRoles(accountId: string): Promise<AccountRole[]>
         // Got the roles
         const container = parentElement.querySelector('div[data-testid="role-list-container"]');
         if (container) {
-          return Array.from(
+          const roles = Array.from(
             container.querySelectorAll<HTMLAnchorElement>('a[data-testid="federation-link"]')
           ).map((link) => ({
             name: link.textContent?.trim() ?? "",
             consoleUrl: link.href,
           }));
+          return roles;
         }
       }
 
@@ -258,33 +259,107 @@ function extractTagsFromName(accountName: string, tagConfigs: TagConfig[]): stri
 }
 
 /**
+ * Get the longest matching substring for a regex matcher against account name
+ */
+function getLongestMatchLength(
+  matcher: string | string[] | undefined,
+  accountName: string
+): number {
+  if (!matcher) return 0;
+
+  const matchers = Array.isArray(matcher) ? matcher : [matcher];
+  let longestLength = 0;
+
+  for (const m of matchers) {
+    if (!m) continue;
+    try {
+      const regex = new RegExp(m);
+      const match = accountName.match(regex);
+      if (match) {
+        // Use the first captured group if it exists, otherwise use the entire match
+        const matchedString = match[1] || match[0];
+        longestLength = Math.max(longestLength, matchedString.length);
+      }
+    } catch {
+      // Invalid regex, skip
+    }
+  }
+
+  return longestLength;
+}
+
+/**
  * Find the deepest matching group for an account
+ * Uses depth-first search to find the deepest level, then selects the group with
+ * the longest matching substring if multiple groups match at the same depth.
  * Returns the path to the deepest matching group, or null if no match
  */
 function findDeepestMatchingGroup(
   account: Account,
   groups: Group[]
 ): { group: Group; path: Group[] } | null {
-  let deepestMatch: { group: Group; path: Group[] } | null = null;
+  interface DepthMatch {
+    group: Group;
+    path: Group[];
+    matchLength: number;
+  }
 
-  const search = (groupsToSearch: Group[], currentPath: Group[]): void => {
+  let deepestMatches: DepthMatch[] = [];
+  let currentDepth = 0;
+
+  const search = (groupsToSearch: Group[], currentPath: Group[], depth: number): void => {
+    let hasMatchAtThisDepth = false;
+    const matchesAtThisDepth: DepthMatch[] = [];
+
     for (const group of groupsToSearch) {
       const groupMatches = testMatcher(group.matcher, account.name);
 
       if (groupMatches) {
-        deepestMatch = { group, path: [...currentPath, group] };
+        hasMatchAtThisDepth = true;
+        const matchLength = getLongestMatchLength(group.matcher, account.name);
+        matchesAtThisDepth.push({
+          group,
+          path: [...currentPath, group],
+          matchLength,
+        });
       }
 
       // Always search children if they exist, regardless of whether parent matched
       // This allows groups without matchers to be traversed
       if (group.children) {
-        search(group.children, groupMatches ? [...currentPath, group] : currentPath);
+        search(group.children, groupMatches ? [...currentPath, group] : currentPath, depth + 1);
+      }
+    }
+
+    // Update deepest matches if we found matches at this depth
+    if (hasMatchAtThisDepth) {
+      if (depth > currentDepth) {
+        currentDepth = depth;
+        deepestMatches = matchesAtThisDepth;
+      } else if (depth === currentDepth) {
+        deepestMatches.push(...matchesAtThisDepth);
       }
     }
   };
 
-  search(groups, []);
-  return deepestMatch;
+  search(groups, [], 0);
+
+  // If no matches found, return null
+  if (deepestMatches.length === 0) {
+    return null;
+  }
+
+  // If only one match, return it
+  if (deepestMatches.length === 1) {
+    return { group: deepestMatches[0].group, path: deepestMatches[0].path };
+  }
+
+  // Multiple matches at same depth: return the one with longest match
+  const bestMatch = deepestMatches.reduce((prev, curr) =>
+    curr.matchLength > prev.matchLength ? curr : prev
+  );
+
+  return { group: bestMatch.group, path: bestMatch.path };
 }
 
 /**
@@ -294,7 +369,7 @@ function buildAccountTree(
   groups: Group[],
   accounts: Account[],
   tagConfigs: TagConfig[]
-): AccountGroupNode[] {
+): (AccountGroupNode | AccountNode)[] {
   // Track which accounts have been placed in groups
   const placedAccountIds = new Set<string>();
 
@@ -362,26 +437,18 @@ function buildAccountTree(
   // Build groups from configuration
   const configGroupNodes = buildGroupNodes(groups);
 
-  // Create "other" group for unmatched accounts
+  // Add unmatched accounts to the top level
   const unmatchedAccounts = accounts.filter((account) => !placedAccountIds.has(account.id));
-  const otherGroupNode: AccountGroupNode | null =
-    unmatchedAccounts.length > 0
-      ? {
-          key: "group-other",
-          data: { name: "Other" },
-          expandedByDefault: false,
-          icon: "pi pi-folder",
-          children: unmatchedAccounts.map((account) => ({
-            key: account.id,
-            data: {
-              ...account,
-              tags: extractTagsFromName(account.name, tagConfigs),
-            },
-          })),
-        }
-      : null;
+  const unmatchedAccountNodes: AccountNode[] = unmatchedAccounts.map((account) => ({
+    key: account.id,
+    data: {
+      ...account,
+      tags: extractTagsFromName(account.name, tagConfigs),
+    },
+    icon: "pi pi-box",
+  }));
 
-  return otherGroupNode ? [...configGroupNodes, otherGroupNode] : configGroupNodes;
+  return [...configGroupNodes, ...unmatchedAccountNodes];
 }
 
 /**
@@ -392,7 +459,7 @@ export function getAccountTree(
   accounts: Account[],
   groups: Group[],
   tagConfigs: TagConfig[] = []
-): AccountGroupNode[] {
+): (AccountGroupNode | AccountNode)[] {
   // Defensive checks
   if (!Array.isArray(groups)) {
     console.error("getAccountTree received non-array groups:", groups);

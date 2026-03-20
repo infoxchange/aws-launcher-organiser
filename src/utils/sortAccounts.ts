@@ -111,11 +111,11 @@ function compareBySubstring(
  * @returns Sorted account group nodes
  */
 export function sortAccountsByConfig(
-  nodes: AccountGroupNode[],
+  nodes: (AccountGroupNode | AccountNode)[],
   sortBy: SortConfig[] | undefined,
   tags: TagConfig[],
   groups?: Group[]
-): AccountGroupNode[] {
+): (AccountGroupNode | AccountNode)[] {
   if (!sortBy || sortBy.length === 0) {
     return nodes;
   }

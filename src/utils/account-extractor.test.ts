@@ -52,12 +52,12 @@ describe("getAccountTree", () => {
       const result = getAccountTree(accounts, groups);
 
       expect(result[0].data.name).toBe("Production");
-      const prodChildren: TestNode[] = result[0].children ?? [];
+      const prodChildren: TestNode[] = (result[0].children ?? []) as TestNode[];
       expect(prodChildren).toHaveLength(1);
       expect(getNodeId(prodChildren[0])).toBe("123");
 
       expect(result[1].data.name).toBe("Development");
-      const devChildren: TestNode[] = result[1].children ?? [];
+      const devChildren: TestNode[] = (result[1].children ?? []) as TestNode[];
       expect(devChildren).toHaveLength(1);
       expect(getNodeId(devChildren[0])).toBe("456");
     });
@@ -73,7 +73,7 @@ describe("getAccountTree", () => {
 
       expect(result).toHaveLength(2);
       expect(result[1].data.name).toBe("Other");
-      const otherChildren: TestNode[] = result[1].children ?? [];
+      const otherChildren: TestNode[] = (result[1].children ?? []) as TestNode[];
       expect(otherChildren).toHaveLength(1);
       expect(getNodeId(otherChildren[0])).toBe("456");
     });
@@ -129,7 +129,7 @@ describe("getAccountTree", () => {
       expect(getNodeId(prodGroupChildren[0])).toBe("123");
 
       expect(result[1].data.name).toBe("Other");
-      const otherGroupChildren: TestNode[] = result[1].children ?? [];
+      const otherGroupChildren: TestNode[] = (result[1].children ?? []) as TestNode[];
       expect(getNodeId(otherGroupChildren[0])).toBe("789");
     });
 
@@ -231,7 +231,7 @@ describe("getAccountTree", () => {
 
       const prodGroup = result[0];
       const [accountNode] = prodGroup.children ?? [];
-      expect(getNodeId(accountNode)).toBe("123");
+      expect(getNodeId(accountNode as TestNode)).toBe("123");
       const accountNodeData = accountNode.data;
       if ("tags" in accountNodeData) {
         expect(accountNodeData.tags).toContain("prod");
