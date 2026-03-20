@@ -215,12 +215,7 @@ function testMatcher(matcher: string | string[] | undefined, accountName: string
   if (!matcher) return false;
 
   const createRegex = (str: string): RegExp => {
-    // Add ^ and $ anchors if matcher doesn't contain them
-    let pattern = str;
-    if (!pattern.includes("^") && !pattern.includes("$")) {
-      pattern = `^${pattern}$`;
-    }
-    return new RegExp(pattern);
+    return new RegExp(str);
   };
 
   if (Array.isArray(matcher)) {
@@ -242,8 +237,7 @@ function extractTagsFromName(accountName: string, tagConfigs: TagConfig[]): stri
       try {
         const matchers = Array.isArray(tag.matcher) ? tag.matcher : [tag.matcher];
         matches = matchers.some((m) => {
-          const pattern = m.includes("^") || m.includes("$") ? m : `^${m}$`;
-          return new RegExp(pattern).test(accountName);
+          return new RegExp(m).test(accountName);
         });
       } catch {
         // If regex is invalid, skip this tag

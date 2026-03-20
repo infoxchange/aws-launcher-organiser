@@ -74,15 +74,7 @@ function compareBySubstring(
   direction: "asc" | "desc"
 ): number {
   try {
-    // Automatically add ^ and $ anchors if matcher doesn't contain either
-    // This allows simple patterns like "dev-" to match full strings "^dev-$"
-    // while respecting custom anchoring like "^(\\w+)-" (leaving it as-is)
-    let pattern = matcher;
-    if (!pattern.includes("^") && !pattern.includes("$")) {
-      pattern = `^${pattern}$`;
-    }
-
-    const regex = new RegExp(pattern);
+    const regex = new RegExp(matcher);
     const aMatch = a.name.match(regex);
     const bMatch = b.name.match(regex);
 
