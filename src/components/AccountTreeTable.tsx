@@ -32,6 +32,7 @@ interface NodeTemplateProps {
   setEditingGroupKey: (key: string | null) => void;
   updateGroup: (groupKey: string, updatedGroup: Group) => void;
   addChildGroup: (parentKey: string) => void;
+  addRootGroup: () => void;
   deleteGroup: (groupKey: string) => void;
   findGroupByKey: (key: string) => Group | null;
   setNodes: React.Dispatch<React.SetStateAction<AccountGroupNode[]>>;
@@ -46,6 +47,7 @@ const NodeTemplate: React.FC<NodeTemplateProps> = ({
   setEditingGroupKey,
   updateGroup,
   addChildGroup,
+  addRootGroup,
   deleteGroup,
   findGroupByKey,
   setNodes,
@@ -75,13 +77,18 @@ const NodeTemplate: React.FC<NodeTemplateProps> = ({
 
   // Button node - special node for adding child groups
   if (isButtonNode) {
-    const parentGroupKey = node.data?.parentGroupKey as string;
+    const parentGroupKey = (node.data as Record<string, unknown>)?.parentGroupKey as string | null;
+    const isRootButton = parentGroupKey === null;
     return (
       <Button
         label="+ add group"
         onClick={(e) => {
           e.stopPropagation();
-          addChildGroup(parentGroupKey);
+          if (isRootButton) {
+            addRootGroup();
+          } else {
+            addChildGroup(parentGroupKey);
+          }
         }}
         text
         size="small"
@@ -379,6 +386,7 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
       setEditingGroupKey={setEditingGroupKey}
       updateGroup={updateGroup}
       addChildGroup={addChildGroup}
+      addRootGroup={addRootGroup}
       deleteGroup={deleteGroup}
       findGroupByKey={findGroupByKey}
       setNodes={setNodes}
@@ -646,6 +654,18 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
     // Inject "add group" button nodes
     filtered = injectButtonNodes(filtered) as AccountGroupNode[];
 
+    // Add root-level button node when in edit mode
+    if (editMode) {
+      const rootButton = {
+        key: "add-button-root",
+        data: {
+          isAddButton: true,
+          parentGroupKey: null,
+        },
+      } as unknown as AccountGroupNode;
+      filtered = [...filtered, rootButton];
+    }
+
     return filtered;
   })();
 
@@ -745,7 +765,7 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
               });
             }}
           />
-          {editMode && visibleNodes.length > 0 && (
+          {editMode && (
             <div className="add-root-group-container">
               <Button
                 label="+ add group"

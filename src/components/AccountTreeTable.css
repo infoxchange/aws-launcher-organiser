@@ -29,6 +29,10 @@
     &.p-treenode-dragover {
       background-color: var(--drag-highlight-color);
     }
+
+    &:has(> .add-child-group-button) > .p-tree-toggler {
+      width: 10px;
+    }
   }
 
   .account-name,

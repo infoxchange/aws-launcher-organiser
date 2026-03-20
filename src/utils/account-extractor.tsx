@@ -219,7 +219,7 @@ function testMatcher(matcher: string | string[] | undefined, accountName: string
   };
 
   if (Array.isArray(matcher)) {
-    return matcher.some((m) => createRegex(m).test(accountName));
+    return matcher.filter((m) => m).some((m) => createRegex(m).test(accountName));
   }
 
   return createRegex(matcher).test(accountName);
@@ -236,9 +236,11 @@ function extractTagsFromName(accountName: string, tagConfigs: TagConfig[]): stri
     if (tag.matcher) {
       try {
         const matchers = Array.isArray(tag.matcher) ? tag.matcher : [tag.matcher];
-        matches = matchers.some((m) => {
-          return new RegExp(m).test(accountName);
-        });
+        matches = matchers
+          .filter((m) => m)
+          .some((m) => {
+            return new RegExp(m).test(accountName);
+          });
       } catch {
         // If regex is invalid, skip this tag
         matches = false;
