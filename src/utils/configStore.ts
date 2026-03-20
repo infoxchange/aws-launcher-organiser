@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import {
+  formatConfig,
   type Group,
   type RemoteConfig,
   RemoteConfigSchema,
@@ -11,7 +12,7 @@ import { generateUUID } from "./uuid";
 
 // Re-export for convenience
 export type { Group, RemoteConfig, SortConfig, TagConfig };
-export { RemoteConfigSchema };
+export { formatConfig, RemoteConfigSchema };
 
 const defaultGroups: Group[] = [];
 const defaultTags: TagConfig[] = [];

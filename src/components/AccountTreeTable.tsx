@@ -18,7 +18,7 @@ import {
   getAccountRoles,
   getAccountTree,
 } from "../utils/account-extractor";
-import { type Group, type TagConfig, useConfigStore } from "../utils/configStore";
+import { formatConfig, type Group, type TagConfig, useConfigStore } from "../utils/configStore";
 import { sortAccountsByConfig } from "../utils/sortAccounts";
 import { generateUUID } from "../utils/uuid";
 import { GroupEditor } from "./GroupEditor";
@@ -320,7 +320,7 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [showSettings, setShowSettings] = useState(false);
-  const [jsonConfig, setJsonConfig] = useState(JSON.stringify(getConfig(), null, 2));
+  const [jsonConfig, setJsonConfig] = useState(JSON.stringify(formatConfig(getConfig()), null, 2));
   const [configError, setConfigError] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [editingGroupKey, setEditingGroupKey] = useState<string | null>(null);
@@ -366,7 +366,7 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
 
   useEffect(() => {
     // Update JSON config when groups or tags change
-    setJsonConfig(JSON.stringify(getConfig(), null, 2));
+    setJsonConfig(JSON.stringify(formatConfig(getConfig()), null, 2));
   }, [getConfig]);
 
   const nodeTemplate = (node: TreeNode) => (
@@ -685,7 +685,7 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
             text
             onClick={() => {
               setShowSettings(true);
-              setJsonConfig(JSON.stringify(getConfig(), null, 2));
+              setJsonConfig(JSON.stringify(formatConfig(getConfig()), null, 2));
               setConfigError(null);
             }}
             className="settings-button"
@@ -696,7 +696,7 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
         visible={showSettings}
         onHide={() => {
           setShowSettings(false);
-          setJsonConfig(JSON.stringify(getConfig(), null, 2));
+          setJsonConfig(JSON.stringify(formatConfig(getConfig()), null, 2));
           setConfigError(null);
         }}
         jsonConfig={jsonConfig}

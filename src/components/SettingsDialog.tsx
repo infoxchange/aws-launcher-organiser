@@ -8,7 +8,7 @@ import { Password } from "primereact/password";
 import type React from "react";
 import { useState } from "react";
 import type { SortConfig, TagConfig } from "../utils/configStore";
-import { RemoteConfigSchema, useConfigStore } from "../utils/configStore";
+import { formatConfig, RemoteConfigSchema, useConfigStore } from "../utils/configStore";
 import { SortingSettings } from "./SortingSettings";
 import { TagSettings } from "./TagSettings";
 import "./SettingsDialog.css";
@@ -85,7 +85,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
     try {
       const parsed = JSON.parse(jsonConfig);
       const updated = { ...parsed, tags: newTags.length > 0 ? newTags : undefined };
-      onConfigChange(JSON.stringify(updated, null, 2));
+      onConfigChange(JSON.stringify(formatConfig(updated), null, 2));
     } catch {
       // jsonConfig is currently invalid JSON; can't update it
     }
@@ -105,7 +105,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
     try {
       const parsed = JSON.parse(jsonConfig);
       const updated = { ...parsed, sortBy: newSortBy.length > 0 ? newSortBy : undefined };
-      onConfigChange(JSON.stringify(updated, null, 2));
+      onConfigChange(JSON.stringify(formatConfig(updated), null, 2));
     } catch {
       // jsonConfig is currently invalid JSON; can't update it
     }
@@ -168,7 +168,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
       setTestMessage(
         `Config updated — ${result.data.groups.length} top-level group(s), version ${result.data.version}.`
       );
-      onConfigChange(JSON.stringify(result.data, null, 2));
+      onConfigChange(JSON.stringify(formatConfig(result.data), null, 2));
     } catch (err) {
       setTestStatus("error");
       setTestMessage(`Fetch failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -329,7 +329,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
               label="Reset to Defaults"
               outlined
               onClick={() => {
-                onConfigChange(JSON.stringify({ version: 1, groups: [] }, null, 2));
+                onConfigChange(JSON.stringify(formatConfig({ version: 1, groups: [] }), null, 2));
                 onConfigError(null);
               }}
             />

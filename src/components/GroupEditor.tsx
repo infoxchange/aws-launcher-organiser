@@ -36,8 +36,17 @@ export const GroupEditor: React.FC<GroupEditorProps> = ({
     handleChange("matcher", value);
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Prevent arrow keys from propagating to parent Tree component
+    // This allows normal text editing with arrow keys inside input/textarea
+    if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+      e.stopPropagation();
+    }
+  };
+
   return (
-    <div className="group-editor">
+    // biome-ignore lint/a11y/noStaticElementInteractions: Div needs onKeyDown to prevent arrow key propagation to Tree
+    <div className="group-editor" onKeyDown={handleKeyDown}>
       <div className="group-editor-field">
         <label htmlFor={`name-${group.key}`}>Name</label>
         <input
