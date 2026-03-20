@@ -186,6 +186,7 @@ const NodeTemplate: React.FC<NodeTemplateProps> = ({
       <div className="group-name-row">
         {editMode ? (
           <>
+            <i className="pi pi-bars drag-handle" />
             <div className="group-name">
               {data?.name} ({countAllAccounts((node as AccountGroupNode).children ?? [])})
             </div>
@@ -514,19 +515,23 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
     const dragActualKey = dragKey.startsWith("group-") ? dragKey.substring(6) : dragKey;
     const dropActualKey = dropKey?.startsWith("group-") ? dropKey.substring(6) : dropKey;
 
+    // Don't allow dropping a group onto itself
+    if (dragActualKey === dropActualKey) return;
+
     let draggedGroup: Group | null = null;
 
-    // Function to find and remove a group from the tree
-    const extractGroup = (groupsToSearch: typeof groups): typeof groups => {
+    // Function to find and remove a group from the tree, storing it in draggedGroup
+    const removeGroup = (groupsToSearch: typeof groups): typeof groups => {
       return groupsToSearch.reduce<typeof groups>((acc, group) => {
         if (group.key === dragActualKey) {
           draggedGroup = group;
-          return acc; // Don't include this group
+          return acc; // Exclude this group from results
         }
         if (group.children) {
-          const filteredChildren = extractGroup(group.children);
-          if (filteredChildren.length !== group.children.length) {
-            acc.push({ ...group, children: filteredChildren });
+          const updatedChildren = removeGroup(group.children);
+          // Only update if children actually changed
+          if (updatedChildren.length !== group.children.length) {
+            acc.push({ ...group, children: updatedChildren });
           } else {
             acc.push(group);
           }
@@ -537,41 +542,47 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
       }, []);
     };
 
-    // Function to find a group and insert the dragged group into its children
-    const insertGroup = (groupsToSearch: typeof groups): typeof groups => {
+    // Function to add the dragged group to the specified location
+    const addGroup = (groupsToSearch: typeof groups): typeof groups => {
       return groupsToSearch.map((group) => {
-        if (group.key === dropActualKey) {
+        // If this is the drop target, add the dragged group to its children
+        if (dropActualKey && group.key === dropActualKey && draggedGroup) {
           const currentChildren = group.children || [];
-          const newChildren = [...currentChildren];
-          if (draggedGroup) {
-            newChildren.splice(dropIndex < 0 ? newChildren.length : dropIndex, 0, draggedGroup);
-          }
-          return { ...group, children: newChildren };
+          const insertIndex = dropIndex < 0 ? currentChildren.length : dropIndex;
+          return {
+            ...group,
+            children: [
+              ...currentChildren.slice(0, insertIndex),
+              draggedGroup,
+              ...currentChildren.slice(insertIndex),
+            ],
+          };
         }
+        // Recurse into children for nested groups
         if (group.children) {
           return {
             ...group,
-            children: insertGroup(group.children),
+            children: addGroup(group.children),
           };
         }
         return group;
       });
     };
 
-    // If dropping at root level (no dropKey)
+    // Remove the dragged group from its current location
+    let updated = removeGroup(groups);
+
+    // If no drop target, add to root level
     if (!dropActualKey) {
-      const updated = extractGroup(groups);
+      const insertIndex = dropIndex < 0 ? updated.length : dropIndex;
       if (draggedGroup) {
-        updated.splice(dropIndex < 0 ? updated.length : dropIndex, 0, draggedGroup);
+        updated = [...updated.slice(0, insertIndex), draggedGroup, ...updated.slice(insertIndex)];
       }
-      setGroups(updated);
-      return;
+    } else {
+      // Add to the drop target's children
+      updated = addGroup(updated);
     }
 
-    // Extract the dragged group
-    let updated = extractGroup(groups);
-    // Insert into the drop target
-    updated = insertGroup(updated);
     setGroups(updated);
   };
 
@@ -710,12 +721,13 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
         <>
           <Tree
             value={visibleNodes}
+            dragdropScope={editMode ? "accounts-tree" : undefined}
             nodeTemplate={nodeTemplate}
             expandedKeys={expandedKeys}
             onDragDrop={(e) => {
               const dragKey = e.dragNode?.key as string;
               const dropKey = e.dropNode?.key as string;
-              // Only allow reordering of groups (keys that start with "group-")
+              // Only allow reordering of groups
               if (dragKey?.startsWith("group-") && (dropKey?.startsWith("group-") || !dropKey)) {
                 reorderGroups(dragKey, dropKey, e.dropIndex ?? -1);
               }
