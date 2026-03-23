@@ -4,7 +4,7 @@ export default defineConfig({
   manifest: {
     name: "AWS Launcher Organiser",
     description: "Organize AWS accounts on the launcher page",
-    version: "0.1.0",
+    version: "0.2.0",
     permissions: ["storage", "alarms"],
     host_permissions: ["<all_urls>"],
     browser_specific_settings: {
