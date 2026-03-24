@@ -6,47 +6,28 @@ with custom matching rules and provide icons for each.
 ![Screenshot of changes make by the extension](./docs/screenshot.png)
 
 ## How to use
-To control how accounts are grouped click the blue cog icon in the top right corner of the AWS start page.
-![Screenshot of cog icon](./docs/cog-icon.png)
+To control how accounts are grouped click the pencil icon in the top right corner of the AWS start page.
+![Screenshot of pencil icon](./docs/screenshot-settings-controls.png)
 
-In the "Configuration (JSON)" field add your own configuration in the format of:
-```JSON
-[
-  {
-    key: "apps",
-    name: "Apps",
-    expandedByDefault: true,
-    children: [
-      {
-        key: "app-1",
-        name: "App 1",
-        icon: "https://example.com/favicon.ico",
-        matcher: "app-1-.*",
-      },
-      {
-        key: "other-app",
-        name: "Other App",
-        matcher: "other-app-.*",
-      },
-    ],
-  },
-  {
-    key: "sandboxes",
-    name: "Sandboxes",
-    matcher: [".*-sandbox"],
-    expandedByDefault: true,
-  },
-  {
-    key: "infrastructure",
-    name: "Infrastructure",
-    expandedByDefault: false,
-    matcher: [
-      "global-logging",
-      "shared-service-.*",
-    ],
-  },
-]
-```
+ That will activate edit mode which should show an "+ add group" button above the list of accounts. Clicking this should
+ create a new group and if you click the pencil icon next to this new group you should see some settings for that
+ group. 
+ 
+ ![screenshot of a newly added group](./docs/screenshot-new-group.png)
+ 
+ ![screenshot of a group settings](./docs/screenshot-group-setttings.png)
+ 
+ The main one to be aware of is "Matcher (Regex)". This allows you to supply a regex and any accounts who's name
+ is matched by this regex will be added to this group.
+ 
+ So for example `-dev$` will match all accounts who's name ends in
+ `-dev`. If the matches for multiple groups match an account then the account is added to the group that is most deeply
+ nested (groups can be nested inside one another by dragging them when in edit mode). If multiple groups of the same depth match then the account is added to the group with the longest matching
+ substring. So for example if the account `app-1-dev` is matched by a group with the matcher `-dev$` and a group with the
+ matcher `.*` (and both groups are of the same nesting level) then the account will be added to the latter group.
+ 
+ Tags can be added by clicking the settings cog icon in the top right corner and clicking "+ add tag". Tags use a
+ similar regex matcher system to determine which accounts has that tag. However unlike groups accounts can have multiple tags.
 
 ## Development Process
 
