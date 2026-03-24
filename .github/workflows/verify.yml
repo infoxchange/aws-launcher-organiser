@@ -1,0 +1,83 @@
+name: Verify
+
+on:
+  push:
+    branches:
+      - "*"
+      # This workflow is called via the publish workflow on main/test-publish, so we don't want it to run directly as well
+      - "!main"
+      - "!test-publish/*"
+  pull_request:
+    branches:
+      - main
+  workflow_call:
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get node version
+        id: get-node-version
+        shell: bash
+        run: echo "node-version=$(jq -r '.engines.node // "lts/*"' package.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.get-node-version.outputs.node-version }}
+
+      - name: Install project packages
+        run: npm clean-install
+
+      - name: Print versions
+        run: |
+          git --version
+          node --version
+          npm --version
+          npx commitlint --version
+
+      - name: Validate current commit (last commit) with commitlint
+        if: github.event_name == 'push'
+        run: npx commitlint --last --verbose
+
+      - name: Validate PR commits with commitlint
+        if: github.event_name == 'pull_request'
+        run: npx commitlint --from ${{ github.event.pull_request.head.sha }}~${{ github.event.pull_request.commits }} --to ${{ github.event.pull_request.head.sha }} --verbose
+
+      - name: Lint and type check
+        run: npm run lint
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get node version
+        id: get-node-version
+        shell: bash
+        run: echo "node-version=$(jq -r '.engines.node // "lts/*"' package.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.get-node-version.outputs.node-version }}
+
+      - name: Print versions
+        run: |
+          git --version
+          node --version
+          npm --version
+
+      - name: Install project packages
+        run: npm clean-install
+
+      - name: Run tests
+        run: npm run test
