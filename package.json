@@ -1,7 +1,7 @@
 {
   "name": "aws-launcher-organiser",
   "displayName": "AWS Launcher Organiser",
-  "version": "0.2.0",
+  "version": "0.0.0-version-set-when-releasing",
   "description": "Browser extension to organise AWS accounts on the launcher page",
   "type": "module",
   "scripts": {

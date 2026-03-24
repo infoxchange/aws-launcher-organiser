@@ -14,3 +14,4 @@ coverage/
 stats.html
 stats-*.json
 web-ext.config.ts
+.env.submit
