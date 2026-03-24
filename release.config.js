@@ -1,5 +1,12 @@
 export default {
-  branches: ["main", "add-ci"],
+  branches: [
+    "main",
+    {
+      name: "test-publish/*",
+      prerelease: `\${name}-${gitCommit}`,
+    },
+    "add-ci",
+  ],
   plugins: [
     [
       "@semantic-release/commit-analyzer",
@@ -38,8 +45,7 @@ export default {
       {
         // Chrome support will be added once https://github.com/aklinker1/publish-browser-extension/pull/50 is resolved
         // publishCmd: 'npm exec wxt -- submit --chrome-zip .output/*-chrome.zip --firefox-zip .output/*-firefox.zip --firefox-sources-zip .output/*-sources.zip'
-        publishCmd:
-          "npm exec wxt -- submit --dry-run --firefox-zip .output/*-firefox.zip --firefox-sources-zip .output/*-sources.zip",
+        publishCmd: "npx tsx scripts/submit-extension.ts",
       },
     ],
   ],

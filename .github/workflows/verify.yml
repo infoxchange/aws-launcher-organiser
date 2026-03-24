@@ -4,7 +4,9 @@ on:
   push:
     branches:
       - "*"
-      - "!main" # This workflow is called via the publish workflow on main, so we don't want it to run directly as well
+      # This workflow is called via the publish workflow on main/test-publish, so we don't want it to run directly as well
+      - "!main"
+      - "!test-publish/*"
   pull_request:
     branches:
       - main
@@ -30,15 +32,15 @@ jobs:
         with:
           node-version: ${{ steps.get-node-version.outputs.node-version }}
 
+      - name: Install project packages
+        run: npm clean-install
+
       - name: Print versions
         run: |
           git --version
           node --version
           npm --version
           npx commitlint --version
-
-      - name: Install project packages
-        run: npm clean-install
 
       - name: Validate current commit (last commit) with commitlint
         if: github.event_name == 'push'

@@ -5,7 +5,7 @@ on:
   push:
     branches:
       - main
-      - add-ci
+      - test-publish/*
 
 permissions:
   contents: read
