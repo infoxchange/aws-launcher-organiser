@@ -2,6 +2,7 @@ import { defineBackground } from "wxt/utils/define-background";
 import { RemoteConfigSchema, STORAGE_KEY } from "../src/utils/configStore";
 
 const ALARM_NAME = "auto-update-config";
+const imageCache = new Map<string, string>();
 
 interface PersistedState {
   groups: unknown[];
@@ -64,9 +65,56 @@ async function checkForConfigUpdates() {
   console.log("[auto-update] Config updated successfully");
 }
 
+/**
+ * Fetch and cache image as data URL to avoid CORS issues in content scripts
+ */
+async function fetchImageAsDataUrl(src: string): Promise<string> {
+  // Check cache first
+  const cached = imageCache.get(src);
+  if (cached) {
+    return cached;
+  }
+
+  try {
+    const response = await fetch(src);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch image: ${response.statusText}`);
+    }
+    const blob = await response.blob();
+    const reader = new FileReader();
+    return new Promise<string>((resolve, reject) => {
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        imageCache.set(src, dataUrl);
+        resolve(dataUrl);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch (error) {
+    console.error(`Failed to fetch image from ${src}:`, error);
+    throw error;
+  }
+}
+
 export default defineBackground({
   main() {
     console.log("Background service worker loaded");
+
+    // Handle message from content scripts
+    chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+      if (message.type === "FETCH_IMAGE") {
+        fetchImageAsDataUrl(message.src)
+          .then((dataUrl) => {
+            sendResponse({ success: true, dataUrl });
+          })
+          .catch((error) => {
+            sendResponse({ success: false, error: error.message });
+          });
+        // Return true to indicate we'll send a response asynchronously
+        return true;
+      }
+    });
 
     // Recreate alarm on service worker startup (service workers can be killed/restarted)
     chrome.alarms.get(ALARM_NAME, (alarm) => {

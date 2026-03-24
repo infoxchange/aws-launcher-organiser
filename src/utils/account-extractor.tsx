@@ -1,5 +1,6 @@
 import type { TreeNode } from "primereact/treenode";
 import type { IconType } from "primereact/utils";
+import { BackgroundLoadedImage } from "../components/BackgroundLoadedImage";
 import type { Group, TagConfig } from "./configStore";
 
 /**
@@ -416,7 +417,14 @@ function buildAccountTree(
       const renderIconSrc = (src: string) => {
         const iconFunction: IconType<TreeNode> = (options) => {
           const { ref, iconProps } = options;
-          return <img src={src} {...iconProps} ref={ref} alt="" aria-hidden="true" />;
+          return (
+            <BackgroundLoadedImage
+              src={src}
+              iconProps={iconProps}
+              forwardedRef={ref}
+              placeholder="pi pi-folder"
+            />
+          );
         };
         return iconFunction;
       };
