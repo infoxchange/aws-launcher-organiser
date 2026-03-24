@@ -18,6 +18,13 @@
     "jsx": "react-jsx",
     "types": ["node", "chrome"]
   },
-  "include": ["src", "entrypoints"],
+  "include": [
+    "src",
+    "entrypoints",
+    "scripts",
+    "commitlint.config.ts",
+    "release.config.ts",
+    "vitest.config.ts"
+  ],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

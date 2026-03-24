@@ -12,7 +12,9 @@ if (!version) {
 
 // Update package.json
 const packageJsonPath = path.resolve("./package.json");
-const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"));
+const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8")) as {
+  version: string;
+};
 packageJson.version = version;
 fs.writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
 console.log(`Updated package.json to version ${version}`);

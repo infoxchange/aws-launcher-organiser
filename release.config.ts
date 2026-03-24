@@ -1,13 +1,39 @@
 import { execSync } from "node:child_process";
+import type { Options } from "semantic-release";
+
+function getGitShortCommit(): string {
+  try {
+    return execSync("git rev-parse --short HEAD", { encoding: "utf8" }).trim();
+  } catch (error) {
+    console.error("Failed to get git commit hash:", error);
+    return "unknown";
+  }
+}
+
+function getCurrentBranchName(): string {
+  try {
+    return execSync("git rev-parse --abbrev-ref HEAD", { encoding: "utf8" }).trim();
+  } catch (error) {
+    console.error("Failed to get current branch name:", error);
+    return "unknown";
+  }
+}
+
+function sanitizeBranchName(name: string): string {
+  // Replace forward slashes and other invalid npm version characters
+  return name.replace(/[/\\]/, "-");
+}
 
 const gitCommit = getGitShortCommit();
+const branchName = getCurrentBranchName();
+const escapedBranchName = sanitizeBranchName(branchName);
 
-export default {
+const config: Options = {
   branches: [
     "main",
     {
       name: "test-publish/*",
-      prerelease: `\${name}-${gitCommit}`,
+      prerelease: `${escapedBranchName}-${gitCommit}`,
     },
     "add-ci",
   ],
@@ -37,11 +63,11 @@ export default {
       "@semantic-release/exec",
       {
         // biome-ignore lint/suspicious/noTemplateCurlyInString: semantic-release interpolates this at runtime
-        prepareCmd: 'NEXT_VERSION="${nextRelease.version}" node scripts/update-version.js',
+        prepareCmd: 'NEXT_VERSION="${nextRelease.version}" npx tsx scripts/update-version.ts',
         // verifyReleaseCmd runs during dry-run in the build job, updating package.json and wxt.config.ts
         // before building, so we can build the extension with the correct version numbers before we actually publish it
         // biome-ignore lint/suspicious/noTemplateCurlyInString: semantic-release interpolates this at runtime
-        verifyReleaseCmd: 'NEXT_VERSION="${nextRelease.version}" node scripts/update-version.js',
+        verifyReleaseCmd: 'NEXT_VERSION="${nextRelease.version}" npx tsx scripts/update-version.ts',
       },
     ],
     "@semantic-release/changelog",
@@ -57,11 +83,4 @@ export default {
   ],
 };
 
-function getGitShortCommit() {
-  try {
-    return execSync("git rev-parse --short HEAD", { encoding: "utf8" }).trim();
-  } catch (error) {
-    console.error("Failed to get git commit hash:", error);
-    return "unknown";
-  }
-}
+export default config;
