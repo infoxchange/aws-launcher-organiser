@@ -1,3 +1,7 @@
+import { execSync } from "child_process";
+
+const gitCommit = getGitShortCommit();
+
 export default {
   branches: [
     "main",
@@ -50,3 +54,12 @@ export default {
     ],
   ],
 };
+
+function getGitShortCommit() {
+  try {
+    return execSync("git rev-parse --short HEAD", { encoding: "utf8" }).trim();
+  } catch (error) {
+    console.error("Failed to get git commit hash:", error);
+    return "unknown";
+  }
+}
