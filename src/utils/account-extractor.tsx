@@ -445,18 +445,36 @@ function buildAccountTree(
   // Build groups from configuration
   const configGroupNodes = buildGroupNodes(groups);
 
-  // Add unmatched accounts to the top level
+  // Add unmatched accounts to an "Other" group
   const unmatchedAccounts = accounts.filter((account) => !placedAccountIds.has(account.id));
-  const unmatchedAccountNodes: AccountNode[] = unmatchedAccounts.map((account) => ({
-    key: account.id,
-    data: {
-      ...account,
-      tags: extractTagsFromName(account.name, tagConfigs),
-    },
-    icon: "pi pi-box",
-  }));
 
-  return [...configGroupNodes, ...unmatchedAccountNodes];
+  if (unmatchedAccounts.length > 0) {
+    const unmatchedAccountNodes: AccountNode[] = unmatchedAccounts.map((account) => ({
+      key: account.id,
+      data: {
+        ...account,
+        tags: extractTagsFromName(account.name, tagConfigs),
+      },
+      icon: "pi pi-box",
+    }));
+
+    // Sort by name
+    unmatchedAccountNodes.sort((a, b) => a.data.name.localeCompare(b.data.name));
+
+    const otherGroup: AccountGroupNode = {
+      key: "group-other",
+      data: {
+        name: "Other",
+      },
+      expandedByDefault: false,
+      icon: "pi pi-folder",
+      children: unmatchedAccountNodes,
+    };
+
+    return [...configGroupNodes, otherGroup];
+  }
+
+  return configGroupNodes;
 }
 
 /**
