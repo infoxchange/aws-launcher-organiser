@@ -62,7 +62,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: extension-zips
-          path: .output/*.zip
+          path: .output
           retention-days: 7
           if-no-files-found: error
 
