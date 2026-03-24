@@ -1,4 +1,4 @@
-import { execSync } from "child_process";
+import { execSync } from "node:child_process";
 
 const gitCommit = getGitShortCommit();
 
@@ -36,10 +36,12 @@ export default {
     [
       "@semantic-release/exec",
       {
-        prepareCmd: `NEXT_VERSION="${nextRelease.version}" node scripts/update-version.js`,
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: semantic-release interpolates this at runtime
+        prepareCmd: 'NEXT_VERSION="${nextRelease.version}" node scripts/update-version.js',
         // verifyReleaseCmd runs during dry-run in the build job, updating package.json and wxt.config.ts
         // before building, so we can build the extension with the correct version numbers before we actually publish it
-        verifyReleaseCmd: `NEXT_VERSION="${nextRelease.version}" node scripts/update-version.js`,
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: semantic-release interpolates this at runtime
+        verifyReleaseCmd: 'NEXT_VERSION="${nextRelease.version}" node scripts/update-version.js',
       },
     ],
     "@semantic-release/changelog",
