@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
 
 const version = process.env.NEXT_VERSION;
 
@@ -14,7 +14,7 @@ if (!version) {
 const packageJsonPath = path.resolve("./package.json");
 const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"));
 packageJson.version = version;
-fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2) + "\n");
+fs.writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
 console.log(`Updated package.json to version ${version}`);
 
 // Update wxt.config.ts

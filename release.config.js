@@ -32,10 +32,10 @@ export default {
     [
       "@semantic-release/exec",
       {
-        prepareCmd: 'NEXT_VERSION="${nextRelease.version}" node scripts/update-version.js',
+        prepareCmd: `NEXT_VERSION="${nextRelease.version}" node scripts/update-version.js`,
         // verifyReleaseCmd runs during dry-run in the build job, updating package.json and wxt.config.ts
         // before building, so we can build the extension with the correct version numbers before we actually publish it
-        verifyReleaseCmd: 'NEXT_VERSION="${nextRelease.version}" node scripts/update-version.js',
+        verifyReleaseCmd: `NEXT_VERSION="${nextRelease.version}" node scripts/update-version.js`,
       },
     ],
     "@semantic-release/changelog",

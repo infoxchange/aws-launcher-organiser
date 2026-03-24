@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { execSync } from "child_process";
+import { execSync } from "node:child_process";
 
 const branch = process.env.GITHUB_REF?.replace("refs/heads/", "") || "";
 const isDryRun = branch.startsWith("test-publish/");
