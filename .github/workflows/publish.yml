@@ -54,6 +54,9 @@ jobs:
           npm run zip
           npm run zip:firefox
           npm run zip:chrome
+          ls -hal .output
+          echo ---
+          ls -hal .output/*.zip
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
