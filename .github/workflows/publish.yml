@@ -64,6 +64,7 @@ jobs:
           name: extension-zips
           path: .output/*.zip
           retention-days: 7
+          if-no-files-found: error
 
   submit:
     name: Submit to stores
