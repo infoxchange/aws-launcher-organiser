@@ -1,6 +1,7 @@
 import { Button } from "primereact/button";
 import { ButtonGroup } from "primereact/buttongroup";
 import { Message } from "primereact/message";
+import { Skeleton } from "primereact/skeleton";
 import { Tree } from "primereact/tree";
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -54,18 +55,22 @@ const NodeTemplate: React.FC<NodeTemplateProps> = ({
   enqueueRoleLoad,
 }) => {
   const [roleLoadError, setRoleLoadError] = useState<string | null>(null);
+  const [isRolesLoading, setIsRolesLoading] = useState(false);
   const data = node.data;
   const isButtonNode = (data as Record<string, unknown>)?.isAddButton === true;
   const account = !isButtonNode && "id" in data ? (data as Account) : null;
 
   const loadRoles = async () => {
     if (!account) return;
+    setIsRolesLoading(true);
     try {
       const roles = await getAccountRoles(account.id);
       setRoleLoadError(null);
       setNodes((prev) => setAccountRoles(prev, account.id, roles));
     } catch (error) {
       setRoleLoadError((error as Error).message);
+    } finally {
+      setIsRolesLoading(false);
     }
   };
 
@@ -121,20 +126,38 @@ const NodeTemplate: React.FC<NodeTemplateProps> = ({
             <span className="account-name">{account.name}</span>
           </span>
           <span className="account-id">({account.id})</span>
+          {account.description && <div className="account-description">{account.description}</div>}
           {account.roles ? (
             <div className="account-roles">
               {account.roles.map((role) => (
-                <a
-                  key={role.name}
-                  href={role.consoleUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="account-role-link"
-                >
-                  {role.name}
-                </a>
+                <div key={role.name} className="account-role-wrapper">
+                  <a
+                    href={role.consoleUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="account-role-link"
+                  >
+                    {role.name}
+                  </a>
+                  {role.accessKeysElement && (
+                    <Button
+                      icon="pi pi-key"
+                      rounded
+                      text
+                      size="small"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        role.accessKeysElement?.click();
+                      }}
+                      className="access-keys-button"
+                      aria-label={`Access keys for ${role.name}`}
+                    />
+                  )}
+                </div>
               ))}
             </div>
+          ) : isRolesLoading ? (
+            <Skeleton className="role-loading-skeleton" width="10rem" height="1.3rem" />
           ) : (
             <div className="account-role-load">
               {roleLoadError && (
@@ -152,7 +175,6 @@ const NodeTemplate: React.FC<NodeTemplateProps> = ({
             </div>
           )}
         </div>
-        {account.description && <div className="account-description">{account.description}</div>}
       </div>
     );
   }
@@ -215,8 +237,8 @@ const NodeTemplate: React.FC<NodeTemplateProps> = ({
             {data?.name} ({countAllAccounts((node as AccountGroupNode).children ?? [])})
           </div>
         )}
+        {groupData?.description && <div className="group-description">{groupData.description}</div>}
       </div>
-      {groupData?.description && <div className="group-description">{groupData.description}</div>}
     </div>
   );
 };

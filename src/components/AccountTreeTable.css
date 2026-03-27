@@ -3,9 +3,15 @@
   --color-bg-header: #f8f8f8;
   --color-bg-hover: #f0f0f0;
   --color-text: #333333;
+  --color-link: #006ce0;
   --color-text-heading: #1a1a1a;
   --color-border: #dddddd;
   --drag-highlight-color: rgba(59, 130, 246, 0.2);
+
+  a,
+  .p-button.p-button-text {
+    color: var(--color-link);
+  }
 
   font-family:
     -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -13,6 +19,11 @@
   color: var(--color-text);
 
   .p-treenode-content {
+    > .p-tree-toggler,
+    > .p-treenode-icon {
+      align-self: start;
+    }
+
     > img {
       width: 20px;
       height: 20px;
@@ -115,17 +126,41 @@
     font-size: 1.2rem;
   }
 
+  .account-role-load {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5em;
+    animation: fade-in-delayed 0.5s ease-in 1.5s both;
+  }
+
+  .role-loading-skeleton {
+    animation: fade-in-delayed 0.5s ease-in 1.5s both;
+  }
+
   .account-roles {
     display: flex;
-    gap: 6px;
+    flex-wrap: wrap;
+    column-gap: 1em;
+  }
+
+  .account-role-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 2px;
   }
 
   .account-role-link {
     font-size: 1.2rem;
-    padding: 1px 6px;
-    border: 1px solid currentColor;
-    border-radius: 3px;
-    text-decoration: none;
+  }
+
+  .access-keys-button {
+    height: 18px;
+    padding: 0;
+
+    .pi {
+      font-size: 1.5rem;
+    }
   }
 
   .tag-dots {
@@ -191,8 +226,14 @@
   .account-header {
     display: flex;
     align-items: center;
-    gap: 6px;
+    column-gap: 6px;
     flex-wrap: wrap;
+
+    .p-inline-message,
+    button {
+      padding-top: 0;
+      padding-bottom: 0;
+    }
   }
 
   .account-name-group {
@@ -220,7 +261,6 @@
     display: flex;
     align-items: center;
     flex-direction: column;
-    gap: 8px;
   }
 
   .group-name-row {
@@ -311,11 +351,12 @@
     --color-bg-header: #242424;
     --color-bg-hover: #2e2e2e;
     --color-text: #e0e0e0;
+    --color-link: rgb(0, 156, 218);
     --color-text-heading: #ffffff;
     --color-border: #404040;
 
     .group-edit-input {
-      border-color: #60a5fa;
+      border-color: var(--color-link);
 
       &:focus {
         box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.3);
@@ -323,7 +364,7 @@
     }
 
     .group-description-input {
-      border-color: #60a5fa;
+      border-color: var(--color-link);
 
       &:focus {
         box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.3);
@@ -334,5 +375,14 @@
   .group-content-editable .group-name:hover,
   .group-content-editable .group-description:hover {
     background-color: rgba(59, 130, 246, 0.2);
+  }
+}
+
+@keyframes fade-in-delayed {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }

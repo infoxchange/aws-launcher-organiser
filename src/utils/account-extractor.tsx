@@ -61,6 +61,7 @@ export function extractAccounts(): Account[] {
 export interface AccountRole {
   name: string;
   consoleUrl: string;
+  accessKeysElement?: HTMLElement;
 }
 
 /**
@@ -143,10 +144,20 @@ export async function getAccountRoles(accountId: string): Promise<AccountRole[]>
         if (container) {
           const roles = Array.from(
             container.querySelectorAll<HTMLAnchorElement>('a[data-testid="federation-link"]')
-          ).map((link) => ({
-            name: link.textContent?.trim() ?? "",
-            consoleUrl: link.href,
-          }));
+          ).map((link) => {
+            // Find the access keys element next to this role link
+            // Look for a button in the same parent row/container
+            const roleRow = link.closest('[data-testid="account-list-cell"]') || link.parentElement;
+            const accessKeysElement = roleRow?.querySelector<HTMLElement>(
+              '[data-testid="role-creation-action-button"]'
+            );
+
+            return {
+              name: link.textContent?.trim() ?? "",
+              consoleUrl: link.href,
+              accessKeysElement: accessKeysElement ?? undefined,
+            };
+          });
           return roles;
         }
       }
