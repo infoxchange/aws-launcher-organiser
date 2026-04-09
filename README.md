@@ -1,5 +1,10 @@
 # AWS Launcher Organiser
 
+[![Chrome Web Store
+Version](./docs/chrome-web-store-badge.png)](https://chromewebstore.google.com/detail/aws-launcher-organiser/mpaanlhogigpcholciledcddbnanllii)
+[![Mozilla Add-on
+Version](./docs/firefox-add-on-badge.png)](https://addons.mozilla.org/en-GB/firefox/addon/aws-launcher-organiser/)
+
 A browser extension let you organise the list of accounts on your AWS account launcher page. Lets you group accounts
 with custom matching rules and provide icons for each.
 
