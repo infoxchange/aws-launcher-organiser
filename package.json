@@ -19,10 +19,15 @@
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage",
+    "test:integration:setup": "tsx scripts/setup-integration-tests.ts",
+    "test:integration": "npm run build:chrome && vitest --config vitest.integration.config.ts --run tests/integration/",
+    "test:integration:watch": "npm run build:chrome && vitest --config vitest.integration.config.ts tests/integration/",
+    "test:integration:clear-cookies": "node -e \"import('./src/utils/test-cookies.ts').then(m => m.clearCookies()) && console.log('✓ Cookies cleared')\"",
     "generate-schema": "tsx scripts/generate-schema.ts",
     "lint-staged": "lint-staged"
   },
   "dependencies": {
+    "playwright": "^1.59.1",
     "primeicons": "^7.0.0",
     "primereact": "^10.9.0",
     "react": "^19.2.3",

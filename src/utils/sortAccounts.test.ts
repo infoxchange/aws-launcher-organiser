@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { AccountGroupNode } from "./account-extractor";
 import type { SortConfig } from "./config-schema";
@@ -355,7 +355,9 @@ describe("sortAccountsByConfig", () => {
         { type: "nameSubstring", direction: "asc", matcher: "[invalid(regex" },
       ];
 
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
       const result = sortAccountsByConfig([group], sortConfig, []) as AccountGroupNode[];
+      errorSpy.mockRestore();
       expect(result[0].children).toEqual([account1, account2]);
     });
   });

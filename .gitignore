@@ -15,3 +15,7 @@ stats.html
 stats-*.json
 web-ext.config.ts
 .env.submit
+
+# Integration test configuration and cookies
+.test-config/
+.test-cookies/
