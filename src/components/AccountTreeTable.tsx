@@ -64,7 +64,7 @@ const NodeTemplate: React.FC<NodeTemplateProps> = ({
     if (!account) return;
     setIsRolesLoading(true);
     try {
-      const roles = await getAccountRoles(account.id);
+      const roles = await getAccountRoles(account);
       setRoleLoadError(null);
       setNodes((prev) => setAccountRoles(prev, account.id, roles));
     } catch (error) {
@@ -77,7 +77,25 @@ const NodeTemplate: React.FC<NodeTemplateProps> = ({
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally fires only on mount
   useEffect(() => {
     if (!account || account.roles) return;
-    enqueueRoleLoad(account.id, loadRoles);
+    // Only load roles when the node is visible (not inside a collapsed group).
+    // PrimeReact Tree hides collapsed children by setting aria-hidden="true" on the parent <ul>.
+    // We use IntersectionObserver so roles only load when the row scrolls into view.
+    const el = document.querySelector<HTMLElement>(`[data-account-id="${account.id}"]`);
+    if (!el) {
+      enqueueRoleLoad(account.id, loadRoles);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          observer.disconnect();
+          enqueueRoleLoad(account.id, loadRoles);
+        }
+      },
+      { threshold: 0 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
   }, []);
 
   // Button node - special node for adding child groups
@@ -105,7 +123,7 @@ const NodeTemplate: React.FC<NodeTemplateProps> = ({
   // Account node - has an id property
   if (account) {
     return (
-      <div className="account-node">
+      <div className="account-node" data-account-id={account.id}>
         <div className="account-header">
           <span className="account-name-group">
             {account.tags && account.tags.length > 0 && (
@@ -350,6 +368,8 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
   const { groups, setGroups, tags, autoUpdateEnabled, getConfig, sortBy } = useConfigStore();
   const [nodes, setNodes] = useState<(AccountGroupNode | AccountNode)[]>([]);
   const [expandedKeys, setExpandedKeys] = useState<Record<string, boolean>>({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadingStatus, setLoadingStatus] = useState("Loading accounts...");
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [showSettings, setShowSettings] = useState(false);
@@ -363,6 +383,8 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
       setEditMode(false);
     }
   }, [autoUpdateEnabled]);
+
+  const rawAccounts = useRef<Account[]>([]);
 
   const roleLoadQueue = useRef<{ accountId: string; execute: () => Promise<void> }[]>([]);
   const activeLoads = useRef(0);
@@ -389,11 +411,64 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
     [processQueue]
   );
 
+  // Run once on mount: extract all accounts from the AWS SSO page across all pages.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally runs only on mount
   useEffect(() => {
-    // Extract and group accounts from the page
-    const accounts = extractAccounts();
-    const grouped = getAccountTree(accounts, groups, tags);
-    setNodes(grouped);
+    const loadAccounts = async () => {
+      try {
+        const accounts = await extractAccounts((status) => setLoadingStatus(status));
+        rawAccounts.current = accounts;
+        const grouped = getAccountTree(accounts, groups, tags);
+        setNodes(grouped);
+        setExpandedKeys((prev) => ({ ...collectExpandedKeys(grouped), ...prev }));
+      } catch (error) {
+        console.error("Failed to extract accounts:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadAccounts();
+  }, []);
+
+  // Re-group cached accounts whenever groups or tags configuration changes.
+  useEffect(() => {
+    if (rawAccounts.current.length === 0) return;
+    const grouped = getAccountTree(rawAccounts.current, groups, tags);
+    setNodes((prev) => {
+      // Preserve already-loaded roles from the previous nodes
+      const rolesByAccountId = new Map<string, Account["roles"]>();
+      const collectRoles = (nodes: (AccountGroupNode | AccountNode)[]) => {
+        for (const node of nodes) {
+          if ("id" in node.data && node.data.roles) {
+            rolesByAccountId.set(node.data.id, node.data.roles);
+          }
+          if (node.children) collectRoles(node.children as (AccountGroupNode | AccountNode)[]);
+        }
+      };
+      collectRoles(prev);
+
+      if (rolesByAccountId.size === 0) return grouped;
+
+      const applyRoles = (
+        nodes: (AccountGroupNode | AccountNode)[]
+      ): (AccountGroupNode | AccountNode)[] =>
+        nodes.map((node) => {
+          if ("id" in node.data) {
+            const roles = rolesByAccountId.get(node.data.id);
+            return roles ? { ...node, data: { ...node.data, roles } } : node;
+          }
+          if (node.children) {
+            return {
+              ...node,
+              children: applyRoles(node.children as (AccountGroupNode | AccountNode)[]),
+            };
+          }
+          return node;
+        });
+
+      return applyRoles(grouped);
+    });
     setExpandedKeys((prev) => ({ ...collectExpandedKeys(grouped), ...prev }));
   }, [groups, tags]);
 
@@ -770,7 +845,9 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
         configError={configError}
         onConfigError={setConfigError}
       />
-      {nodes.length === 0 ? (
+      {isLoading ? (
+        <p>{loadingStatus}</p>
+      ) : nodes.length === 0 ? (
         <p>No accounts found on this page</p>
       ) : (
         <>

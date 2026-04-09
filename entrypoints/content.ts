@@ -32,9 +32,17 @@ export default defineContentScript({
 });
 
 function initializeTreeTable() {
+  console.log(
+    "[content] initializeTreeTable called, readyState:",
+    document.readyState,
+    "URL:",
+    window.location.href
+  );
   // Find the target element
   const getParent = () => document.querySelector('[role="tabpanel"]');
   let targetElement = getParent();
+
+  console.log("[content] tabpanel element found immediately:", !!targetElement);
 
   if (targetElement) {
     // Element exists, proceed with setup

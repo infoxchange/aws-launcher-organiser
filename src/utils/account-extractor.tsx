@@ -15,6 +15,7 @@ export interface Account {
   tags?: string[];
   roles?: AccountRole[];
   description?: string;
+  pageNumber?: number; // Track which page this account is on (1-indexed)
 }
 
 export interface AccountGroupNode extends TreeNode {
@@ -32,30 +33,154 @@ export interface AccountNode extends TreeNode {
 }
 
 /**
- * Extracts account information from AWS SSO start page DOM
+ * Get the current page number from pagination controls
  */
-export function extractAccounts(): Account[] {
+function getCurrentPageNumber(): number {
+  // AWS SSO uses aria-current="true" on the active page button (not the standard "page" value)
+  const activePage = document.querySelector<HTMLElement>(
+    'button[aria-label^="Page"][aria-current="true"]:not(#aws-account-tree-table *)'
+  );
+  if (activePage) {
+    const num = parseInt(activePage.textContent ?? "", 10);
+    if (!Number.isNaN(num)) return num;
+  }
+  return 1;
+}
+
+/**
+ * Extract accounts from the current page only
+ * The accounts are displayed in a table with 3 columns: Name (TH), ID (TD), Email (TD)
+ */
+function extractAccountsFromCurrentPage(pageNumber: number): Account[] {
   const accounts: Account[] = [];
 
-  // AWS SSO displays accounts in specific container elements
-  // Look for account tiles or list items with account information
-  const accountElements = document.querySelectorAll(
-    '[data-testid="account-list-cell"] > :last-child'
-  );
+  // Get all table rows in the accounts table
+  // The table has role="treegrid" and contains rows with data-selection-item="item"
+  const rows = document.querySelectorAll('table[role="treegrid"] tr[data-selection-item="item"]');
 
-  accountElements.forEach((element) => {
-    const name = element.children[0]?.textContent?.trim();
-    const [id, email] =
-      element.children[1]?.textContent?.split(" | ").map((part) => part.trim()) || [];
+  rows.forEach((row, _idx) => {
+    // Each row has 3 cells:
+    // 1. TH element with account name (in a div with data-testid="account-list-cell")
+    // 2. TD element with account ID (in a span)
+    // 3. TD element with email address
+    const nameCell = row.querySelector("th");
+    const cells = Array.from(row.querySelectorAll("td"));
 
-    accounts.push({
-      id,
-      name,
-      email,
-    });
+    if (nameCell && cells.length >= 2) {
+      // Extract account name from TH cell
+      const nameElement = nameCell.querySelector('[data-testid="account-list-cell"]');
+      const name = nameElement?.textContent?.trim();
+
+      // Extract account ID from first TD cell
+      const id = cells[0]?.textContent?.trim();
+
+      // Extract email from second TD cell
+      const email = cells[1]?.textContent?.trim();
+
+      if (id && name && email) {
+        accounts.push({
+          id,
+          name,
+          email,
+          pageNumber,
+        });
+      }
+    }
   });
 
   return accounts;
+}
+
+/**
+ * Check if there's a next page available
+ */
+function hasNextPage(): boolean {
+  const nextButton = document.querySelector('button[aria-label="Next page"]:not([disabled])');
+  return !!nextButton && !nextButton.hasAttribute("disabled");
+}
+
+/**
+ * Click the next page button and wait for page to load
+ */
+async function goToNextPage(): Promise<boolean> {
+  const nextButton = document.querySelector<HTMLButtonElement>('button[aria-label="Next page"]');
+
+  if (!nextButton || nextButton.hasAttribute("disabled")) {
+    return false;
+  }
+
+  // Capture the text of the first account on the current page so we can detect when it changes
+  const firstRowText =
+    document.querySelector('table[role="treegrid"] tr[data-selection-item="item"] th')
+      ?.textContent ?? "";
+
+  nextButton.click();
+
+  // Wait for the page to update by detecting that the first row's content has changed
+  return new Promise((resolve) => {
+    const maxWait = 5000;
+    const startTime = Date.now();
+
+    const checkInterval = setInterval(() => {
+      const currentFirstRowText =
+        document.querySelector('table[role="treegrid"] tr[data-selection-item="item"] th')
+          ?.textContent ?? "";
+
+      // Page has updated when the first row text changes, or fall back to maxWait
+      if (currentFirstRowText !== firstRowText || Date.now() - startTime > maxWait) {
+        clearInterval(checkInterval);
+        resolve(true);
+      }
+    }, 100);
+  });
+}
+
+/**
+ * Extracts all account information from AWS SSO start page across all pages
+ */
+export async function extractAccounts(onProgress?: (status: string) => void): Promise<Account[]> {
+  const allAccounts: Account[] = [];
+  let pageNumber = 1;
+  const maxPages = 100; // Safety limit to prevent infinite loops
+
+  try {
+    // Wait for account rows to appear - they may not be in the DOM immediately
+    onProgress?.("Waiting for accounts to appear on the page...");
+    await waitForAnyElement(
+      document.body,
+      ['table[role="treegrid"] tr[data-selection-item="item"]'],
+      15000
+    );
+  } catch {
+    console.warn("[extractAccounts] Timed out waiting for account rows to appear in DOM");
+    return [];
+  }
+
+  try {
+    while (pageNumber <= maxPages) {
+      document.querySelectorAll('table[role="treegrid"] tr');
+      document.querySelectorAll('table[role="treegrid"] tr[data-selection-item="item"]');
+
+      onProgress?.(`Loading page ${pageNumber}… (${allAccounts.length} accounts so far)`);
+      const pageAccounts = extractAccountsFromCurrentPage(pageNumber);
+      allAccounts.push(...pageAccounts);
+
+      console.log(`[extractAccounts] Page ${pageNumber}: Found ${pageAccounts.length} accounts`);
+
+      if (!hasNextPage()) {
+        console.log("[extractAccounts] No more pages available");
+        break;
+      }
+
+      await goToNextPage();
+      pageNumber++;
+    }
+  } catch (error) {
+    console.error("[extractAccounts] Error extracting accounts:", error);
+  }
+
+  console.log(`[extractAccounts] Total accounts extracted: ${allAccounts.length}`);
+  return allAccounts;
 }
 
 export interface AccountRole {
@@ -98,127 +223,221 @@ function waitForAnyElement(parent: Element, selectors: string[], timeout = 5000)
   });
 }
 
-export async function getAccountRoles(accountId: string): Promise<AccountRole[]> {
-  const buttons = document.querySelectorAll<HTMLButtonElement>(
-    'button[data-testid="account-list-cell"]'
+/**
+ * Mutex for page navigation — prevents concurrent role loads from racing to navigate
+ * to different pages simultaneously, which corrupts the pagination state.
+ */
+let navigationLock: Promise<void> = Promise.resolve();
+
+/**
+ * Navigate to a specific page in the accounts table
+ */
+async function navigateToPage(targetPageNumber: number): Promise<void> {
+  const currentPageNumber = getCurrentPageNumber();
+
+  // Debug: log pagination DOM state on first call
+  document.querySelector('[data-testid="pagination-bar"]');
+  document.querySelector('button[aria-label="Previous page"]');
+  document.querySelector('button[aria-label="Next page"]');
+
+  if (currentPageNumber === targetPageNumber) {
+    return;
+  }
+
+  console.log(
+    `[navigateToPage] Navigating from page ${currentPageNumber} to page ${targetPageNumber}`
   );
 
-  let accountButton: HTMLButtonElement | null = null;
-  for (const button of buttons) {
-    if (button.textContent?.includes(accountId)) {
-      accountButton = button;
-      break;
+  if (targetPageNumber > currentPageNumber) {
+    // Go forward
+    for (let i = currentPageNumber; i < targetPageNumber; i++) {
+      await goToNextPage();
+    }
+  } else {
+    // Go backward - click previous page button and wait for content to change
+    for (let i = currentPageNumber; i > targetPageNumber; i--) {
+      const prevButton = document.querySelector<HTMLButtonElement>(
+        'button[aria-label="Previous page"]'
+      );
+      if (!prevButton || prevButton.hasAttribute("disabled")) break;
+
+      const firstRowText =
+        document.querySelector('table[role="treegrid"] tr[data-selection-item="item"] th')
+          ?.textContent ?? "";
+
+      prevButton.click();
+
+      // Wait for the first row's content to change (same detection as goToNextPage)
+      await new Promise<void>((resolve) => {
+        const maxWait = 5000;
+        const startTime = Date.now();
+        const interval = setInterval(() => {
+          const current =
+            document.querySelector('table[role="treegrid"] tr[data-selection-item="item"] th')
+              ?.textContent ?? "";
+          if (current !== firstRowText || Date.now() - startTime > maxWait) {
+            clearInterval(interval);
+            resolve();
+          }
+        }, 100);
+      });
     }
   }
+}
 
-  if (!accountButton) {
-    throw new Error(`Account button not found for id: ${accountId}`);
+export async function getAccountRoles(account: Account | string): Promise<AccountRole[]> {
+  // Support both old API (string accountId) and new API (Account object)
+  let accountId: string;
+  let pageNumber: number | undefined;
+
+  if (typeof account === "string") {
+    accountId = account;
+  } else {
+    accountId = account.id;
+    pageNumber = account.pageNumber;
   }
 
-  const parentElement = accountButton.parentElement;
-  if (!parentElement) {
-    throw new Error(`Account button has no parent element for id: ${accountId}`);
-  }
+  // Serialise all page navigation through a mutex so concurrent role loads don't race.
+  let releaseLock!: () => void;
+  const lockAcquired = new Promise<void>((resolve) => {
+    releaseLock = resolve;
+  });
+  const previousLock = navigationLock;
+  navigationLock = lockAcquired;
 
-  if (accountButton.getAttribute("aria-expanded") !== "true") {
-    accountButton.click();
-  }
+  try {
+    await previousLock;
 
-  // Try up to 3 times to load roles, retrying on error
-  const MAX_RETRIES = 3;
+    // Navigate to the correct page if specified
+    if (pageNumber) {
+      await navigateToPage(pageNumber);
+    }
 
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    try {
-      // Wait for either federation link or error alert to appear
-      await waitForAnyElement(
-        parentElement,
-        ['a[data-testid="federation-link"]', 'div[data-testid="error-component-alert"]'],
-        5000
-      );
+    const rows = document.querySelectorAll<HTMLTableRowElement>(
+      'table[role="treegrid"] tr[data-selection-item="item"]'
+    );
 
-      // Check if federation link appeared
-      const federationLink = parentElement.querySelector('a[data-testid="federation-link"]');
-      if (federationLink) {
-        // Got the roles
-        const container = parentElement.querySelector('div[data-testid="role-list-container"]');
-        if (container) {
-          const roles = Array.from(
-            container.querySelectorAll<HTMLAnchorElement>('a[data-testid="federation-link"]')
-          ).map((link) => {
-            // Find the access keys element next to this role link
-            // Look for a button in the same parent row/container
-            const roleRow = link.closest('[data-testid="account-list-cell"]') || link.parentElement;
-            const accessKeysElement = roleRow?.querySelector<HTMLElement>(
+    let accountButton: HTMLButtonElement | null = null;
+    let matchedRow: HTMLTableRowElement | null = null;
+    for (const row of rows) {
+      const tds = row.querySelectorAll("td");
+      const firstTDText = tds[0]?.textContent?.trim();
+      if (firstTDText === accountId) {
+        accountButton = row.querySelector<HTMLButtonElement>("button[aria-expanded]");
+        matchedRow = row;
+        break;
+      }
+    }
+
+    if (!accountButton || !matchedRow) {
+      throw new Error(`Account button not found for id: ${accountId}`);
+    }
+
+    // Use the table row as the scope for waiting for federation links
+    const rowElement = matchedRow;
+
+    if (accountButton.getAttribute("aria-expanded") !== "true") {
+      accountButton.click();
+      // Wait for the expanded role row to be inserted after the current row
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    }
+    const roleRow = rowElement.nextElementSibling as Element | null;
+
+    // Try up to 3 times to load roles, retrying on error
+    const MAX_RETRIES = 3;
+
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        // Wait for either federation link or error alert to appear in the expanded sibling row
+        await waitForAnyElement(
+          roleRow ?? document.body,
+          ['a[data-testid="federation-link"]', 'div[data-testid="error-component-alert"]'],
+          5000
+        );
+        const scope = roleRow ?? document.body;
+
+        // Check if federation link appeared
+        const federationLink = scope.querySelector('a[data-testid="federation-link"]');
+        if (federationLink) {
+          // Got the roles — collect all federation links in the expanded area
+          const allLinks = Array.from(
+            scope.querySelectorAll<HTMLAnchorElement>('a[data-testid="federation-link"]')
+          );
+          return allLinks.map((link) => {
+            const roleContainer =
+              link.closest('[data-testid="account-list-cell"]') || link.parentElement;
+            const accessKeysElement = roleContainer?.querySelector<HTMLElement>(
               '[data-testid="role-creation-action-button"]'
             );
-
             return {
               name: link.textContent?.trim() ?? "",
               consoleUrl: link.href,
               accessKeysElement: accessKeysElement ?? undefined,
             };
           });
-          return roles;
         }
-      }
 
-      // Check if error alert appeared
-      const errorAlert = parentElement.querySelector('div[data-testid="error-component-alert"]');
-      if (errorAlert && attempt < MAX_RETRIES - 1) {
-        const retryButton = errorAlert.querySelector('button[data-testid="retry-button"]');
-        if (retryButton) {
-          const errorMessage =
-            errorAlert.querySelector(".awsui_content_mx3cw_1ehno_391")?.textContent || "";
-          // Wait times: 2s, 5s, 10s (longer for rate limiting)
-          const isRateLimited = errorMessage.includes("HTTP 429");
-          const waitTimes = [2000, 5000, 10000];
-          const waitTime = isRateLimited ? waitTimes[attempt] : waitTimes[attempt];
-          console.log(`[getAccountRoles] Error detected for account ${accountId}: ${errorMessage}`);
-          console.log(
-            `[getAccountRoles] Retrying in ${waitTime}ms (attempt ${attempt + 1}/${MAX_RETRIES - 1})...`
+        // Check if error alert appeared
+        const errorAlert = scope.querySelector('div[data-testid="error-component-alert"]');
+        if (errorAlert && attempt < MAX_RETRIES - 1) {
+          const retryButton = errorAlert.querySelector('button[data-testid="retry-button"]');
+          if (retryButton) {
+            const errorMessage =
+              errorAlert.querySelector(".awsui_content_mx3cw_1ehno_391")?.textContent || "";
+            // Wait times: 2s, 5s, 10s (longer for rate limiting)
+            const isRateLimited = errorMessage.includes("HTTP 429");
+            const waitTimes = [2000, 5000, 10000];
+            const waitTime = isRateLimited ? waitTimes[attempt] : waitTimes[attempt];
+            console.log(
+              `[getAccountRoles] Retrying in ${waitTime}ms (attempt ${attempt + 1}/${MAX_RETRIES - 1})...`
+            );
+            (retryButton as HTMLButtonElement).click();
+            await new Promise((resolve) => setTimeout(resolve, waitTime));
+            continue;
+          }
+        }
+
+        // If we got here, federation link didn't appear but error alert did
+        if (errorAlert) {
+          if (attempt === MAX_RETRIES - 1) {
+            const errorMessage =
+              errorAlert.querySelector(".awsui_content_mx3cw_1ehno_391")?.textContent ||
+              "Unknown error";
+            throw new Error(
+              `Failed to load roles for account ${accountId} after ${MAX_RETRIES} attempts: ${errorMessage}`
+            );
+          }
+        } else {
+          // Neither link nor error appeared before timeout - shouldn't happen with waitForAnyElement
+          throw new Error(
+            `Failed to load roles for account ${accountId}: no federation link or error alert appeared`
           );
-          (retryButton as HTMLButtonElement).click();
-          await new Promise((resolve) => setTimeout(resolve, waitTime));
-          continue;
         }
-      }
-
-      // If we got here, federation link didn't appear but error alert did
-      if (errorAlert) {
+      } catch (error) {
+        // Only re-throw if this was the last attempt or an unexpected error
         if (attempt === MAX_RETRIES - 1) {
-          const errorMessage =
-            errorAlert.querySelector(".awsui_content_mx3cw_1ehno_391")?.textContent ||
-            "Unknown error";
+          if (error instanceof Error && error.message.includes("Failed to load roles")) {
+            throw error;
+          }
+          const errorAlert = (roleRow ?? document.body).querySelector<Element>(
+            'div[data-testid="error-component-alert"]'
+          );
+          const errorMessage = errorAlert
+            ? errorAlert.querySelector(".awsui_content_mx3cw_1ehno_391")?.textContent ||
+              "Unknown error"
+            : "Timeout waiting for roles";
           throw new Error(
             `Failed to load roles for account ${accountId} after ${MAX_RETRIES} attempts: ${errorMessage}`
           );
         }
-      } else {
-        // Neither link nor error appeared before timeout - shouldn't happen with waitForAnyElement
-        throw new Error(
-          `Failed to load roles for account ${accountId}: no federation link or error alert appeared`
-        );
-      }
-    } catch (error) {
-      // Only re-throw if this was the last attempt or an unexpected error
-      if (attempt === MAX_RETRIES - 1) {
-        if (error instanceof Error && error.message.includes("Failed to load roles")) {
-          throw error;
-        }
-        const errorAlert = parentElement.querySelector('div[data-testid="error-component-alert"]');
-        const errorMessage = errorAlert
-          ? errorAlert.querySelector(".awsui_content_mx3cw_1ehno_391")?.textContent ||
-            "Unknown error"
-          : "Timeout waiting for roles";
-        throw new Error(
-          `Failed to load roles for account ${accountId} after ${MAX_RETRIES} attempts: ${errorMessage}`
-        );
       }
     }
-  }
 
-  // Shouldn't reach here
-  throw new Error(`Failed to load roles for account ${accountId} after ${MAX_RETRIES} attempts`);
+    // Shouldn't reach here
+    throw new Error(`Failed to load roles for account ${accountId} after ${MAX_RETRIES} attempts`);
+  } finally {
+    releaseLock();
+  }
 }
 
 /**
@@ -512,11 +731,6 @@ export function getAccountTree(
     console.error("getAccountTree received non-array accounts:", accounts);
     accounts = [];
   }
-
-  console.log(
-    "buildAccountTree(groups, accounts, tagConfigs)",
-    buildAccountTree(groups, accounts, tagConfigs)
-  );
 
   return buildAccountTree(groups, accounts, tagConfigs);
 }
