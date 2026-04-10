@@ -69,10 +69,10 @@ function initializeTreeTable() {
 function setupTreeTable(targetElement: Element) {
   // Create a container for the TreeTable
   const container = document.createElement("div");
-  container.id = "aws-account-tree-table";
+  container.id = "aws-launcher-organiser-account-tree-root";
 
   // Check if container already exists
-  const existing = document.getElementById("aws-account-tree-table");
+  const existing = document.getElementById(container.id);
   if (existing) {
     existing.remove();
   }

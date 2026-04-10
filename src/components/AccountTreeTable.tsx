@@ -365,7 +365,8 @@ function setAccountRoles(
 }
 
 export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
-  const { groups, setGroups, tags, autoUpdateEnabled, getConfig, sortBy } = useConfigStore();
+  const { groups, setGroups, tags, autoUpdateEnabled, getConfig, sortBy, showOriginalList } =
+    useConfigStore();
   const [nodes, setNodes] = useState<(AccountGroupNode | AccountNode)[]>([]);
   const [expandedKeys, setExpandedKeys] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState(true);
@@ -780,7 +781,7 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
   })();
 
   return (
-    <div>
+    <div id="aws-account-tree-table" className={showOriginalList ? "show-original-list" : ""}>
       <div className="filter-controls">
         <div className="group">
           <input

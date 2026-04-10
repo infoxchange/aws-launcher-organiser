@@ -63,12 +63,14 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   const [draftAutoUpdateEnabled, setDraftAutoUpdateEnabled] = useState(false);
   const [draftAutoUpdateUrl, setDraftAutoUpdateUrl] = useState("");
   const [draftAutoUpdateAuthToken, setDraftAutoUpdateAuthToken] = useState("");
+  const [draftShowOriginalList, setDraftShowOriginalList] = useState(false);
 
   const initializeDraft = () => {
     const state = useConfigStore.getState();
     setDraftAutoUpdateEnabled(state.autoUpdateEnabled);
     setDraftAutoUpdateUrl(state.autoUpdateUrl);
     setDraftAutoUpdateAuthToken(state.autoUpdateAuthToken);
+    setDraftShowOriginalList(state.showOriginalList);
   };
 
   // Parse tags out of the draft jsonConfig so TagSettings always reflects the textarea
@@ -287,18 +289,30 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
           )}
 
           <hr className="section-divider" />
-          <Fieldset legend="Advanced Configuration" toggleable collapsed>
-            <textarea
-              id="json-config"
-              value={jsonConfig}
-              onChange={(e) => {
-                onConfigChange(e.target.value);
-                onConfigError(null);
-              }}
-              className="json-textarea"
-              readOnly={draftAutoUpdateEnabled}
-            />
-            {configError && <div className="config-error">{configError}</div>}
+          <Fieldset legend="Advanced" toggleable collapsed>
+            <div className="fieldset-content">
+              <div className="original-list-toggle-row">
+                <label htmlFor="show-original-list-toggle">Show original account list</label>
+                <InputSwitch
+                  inputId="show-original-list-toggle"
+                  checked={draftShowOriginalList}
+                  onChange={(e) => setDraftShowOriginalList(e.value ?? false)}
+                />
+              </div>
+              <hr className="fieldset-divider" />
+              <h5>Configuration</h5>
+              <textarea
+                id="json-config"
+                value={jsonConfig}
+                onChange={(e) => {
+                  onConfigChange(e.target.value);
+                  onConfigError(null);
+                }}
+                className="json-textarea"
+                readOnly={draftAutoUpdateEnabled}
+              />
+              {configError && <div className="config-error">{configError}</div>}
+            </div>
           </Fieldset>
           <div className="dialog-buttons">
             <Button
@@ -312,11 +326,13 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                     setAutoUpdateEnabled,
                     setAutoUpdateUrl,
                     setAutoUpdateAuthToken,
+                    setShowOriginalList,
                   } = useConfigStore.getState();
                   setConfig(validated);
                   setAutoUpdateEnabled(draftAutoUpdateEnabled);
                   setAutoUpdateUrl(draftAutoUpdateUrl);
                   setAutoUpdateAuthToken(draftAutoUpdateAuthToken);
+                  setShowOriginalList(draftShowOriginalList);
                   onHide();
                   onConfigError(null);
                 } catch (e) {

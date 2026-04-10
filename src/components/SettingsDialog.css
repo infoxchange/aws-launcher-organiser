@@ -104,6 +104,33 @@
     margin-top: 8px;
   }
 
+  .original-list-toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .fieldset-content {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .fieldset-divider {
+    border: none;
+    border-top: 1px solid var(--color-border);
+    margin: 8px 0;
+  }
+
+  .p-fieldset {
+    .p-fieldset-legend {
+      button {
+        font-weight: 600;
+      }
+    }
+  }
+
   .dialog-buttons {
     display: flex;
     gap: 8px;

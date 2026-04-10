@@ -40,6 +40,7 @@ interface ConfigStore {
   autoUpdateEnabled: boolean;
   autoUpdateUrl: string;
   autoUpdateAuthToken: string;
+  showOriginalList: boolean;
   setGroups: (groups: Group[]) => void;
   setTags: (tags: TagConfig[]) => void;
   setSortBy: (sortBy: SortConfig[]) => void;
@@ -47,6 +48,7 @@ interface ConfigStore {
   setAutoUpdateEnabled: (enabled: boolean) => void;
   setAutoUpdateUrl: (url: string) => void;
   setAutoUpdateAuthToken: (token: string) => void;
+  setShowOriginalList: (show: boolean) => void;
   resetToDefaults: () => void;
   getConfig: () => RemoteConfig;
 }
@@ -104,6 +106,7 @@ export const useConfigStore = create<ConfigStore>()(
       autoUpdateEnabled: false,
       autoUpdateUrl: "",
       autoUpdateAuthToken: "",
+      showOriginalList: false,
       setGroups: (groups: Group[]) => set({ groups: ensureGroupUUIDs(groups) }),
       setTags: (tags: TagConfig[]) => {
         const error = validateTags(tags);
@@ -129,6 +132,7 @@ export const useConfigStore = create<ConfigStore>()(
       setAutoUpdateEnabled: (enabled: boolean) => set({ autoUpdateEnabled: enabled }),
       setAutoUpdateUrl: (url: string) => set({ autoUpdateUrl: url }),
       setAutoUpdateAuthToken: (token: string) => set({ autoUpdateAuthToken: token }),
+      setShowOriginalList: (show: boolean) => set({ showOriginalList: show }),
       resetToDefaults: () =>
         set({ groups: ensureGroupUUIDs(defaultGroups), tags: defaultTags, sortBy: defaultSortBy }),
       getConfig: () => {
@@ -154,6 +158,7 @@ export const useConfigStore = create<ConfigStore>()(
             autoUpdateEnabled: false,
             autoUpdateUrl: "",
             autoUpdateAuthToken: "",
+            showOriginalList: false,
           };
         }
 

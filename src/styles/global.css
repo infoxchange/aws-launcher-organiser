@@ -1,4 +1,11 @@
-#aws-account-tree-table ~ * {
+/* Hide the original AWS launcher account list by default */
+/* It's shown when .show-original-list class is applied to #aws-account-tree-table */
+#aws-launcher-organiser-account-tree-root ~ * {
   /* biome-ignore lint: Required to override AWS launcher styling */
   display: none !important;
+}
+
+#aws-launcher-organiser-account-tree-root:has(> .show-original-list) ~ * {
+  /* biome-ignore lint: Required to override AWS launcher styling */
+  display: flex !important;
 }
