@@ -137,6 +137,8 @@ async function goToNextPage(): Promise<boolean> {
 
 /**
  * Extracts account information progressively, calling onAccountsFound for each page of accounts
+ * Acquires "*" (extraction mode lock) for the entire duration to prevent concurrent role loading
+ * on different pages from interfering with pagination.
  */
 export async function extractAccountsProgressive(
   onProgress?: (status: string) => void,
@@ -161,7 +163,13 @@ export async function extractAccountsProgressive(
     return [];
   }
 
+  // Acquire extraction mode lock for the entire extraction process
+  // This prevents any other code from accessing pages until all extraction is complete
+  let releaseExtractionLock: (() => void) | null = null;
+
   try {
+    releaseExtractionLock = await acquirePageAccess("*", "extractAccountsProgressive");
+
     while (pageNumber <= maxPages) {
       // Wait for any "Loading accounts" indicator inside the treegrid to disappear
       await waitForLoadingToComplete('table[role="treegrid"]');
@@ -191,6 +199,11 @@ export async function extractAccountsProgressive(
   } catch (error) {
     console.error("[extractAccountsProgressive] Error extracting accounts:", error);
     throw error;
+  } finally {
+    // Release extraction lock
+    if (releaseExtractionLock) {
+      releaseExtractionLock();
+    }
   }
 
   console.log(`[extractAccountsProgressive] ✓ Total accounts extracted: ${allAccounts.length}`);
@@ -276,10 +289,81 @@ function waitForAnyElement(parent: Element, selectors: string[], timeout = 5000)
 }
 
 /**
- * Mutex for page navigation — prevents concurrent role loads from racing to navigate
- * to different pages simultaneously, which corrupts the pagination state.
+ * Page access locking mechanism with extraction priority
+ * The extraction code claims "*" for exclusive access to all pages.
+ * Other code claims a specific page number and must wait if "*" is locked.
+ *
+ * Only one claim can exist at a time for "*" (extraction mode).
+ * Multiple concurrent claims can exist for a specific page number (if not in extraction mode).
+ * Once extraction acquires "*", all other code waits until extraction releases it.
  */
-let navigationLock: Promise<void> = Promise.resolve();
+let currentPageLocked: string | number | null = null; // "*" for extraction, or a page number
+let pageAccessClaims = 0;
+const pageChangeWaiters: (() => void)[] = [];
+
+/**
+ * Acquire access to a page or to all pages for extraction
+ *
+ * @param pageNumber - "*" for exclusive extraction mode, or a specific page number
+ * @param caller - Name/ID of the code requesting access (for logging)
+ * @returns Release function to call when done
+ *
+ * Extraction mode ("*"):
+ *   - Waits until no locks exist
+ *   - Only one claim allowed at a time
+ *   - Blocks all other page access
+ *
+ * Specific page mode (number):
+ *   - Waits if "*" is locked or a different page is locked
+ *   - Multiple concurrent claims on same page allowed
+ *   - Other pages will wait
+ */
+async function acquirePageAccess(
+  pageNumber: string | number,
+  caller: string = "unknown"
+): Promise<() => void> {
+  const isExtractionMode = pageNumber === "*";
+
+  console.log(
+    `🔒 [${caller}] Requesting page access: ${isExtractionMode ? "EXTRACTION MODE (*)" : `page ${pageNumber}`}`
+  );
+
+  // Wait if another lock is active
+  while (currentPageLocked !== null && currentPageLocked !== pageNumber) {
+    const lockedDesc =
+      currentPageLocked === "*" ? "EXTRACTION MODE (*)" : `page ${currentPageLocked}`;
+    console.log(`⏳ [${caller}] Waiting - ${lockedDesc} is locked`);
+    await new Promise((resolve) => pageChangeWaiters.push(resolve));
+  }
+
+  // Acquire the lock
+  if (currentPageLocked === null) {
+    currentPageLocked = pageNumber;
+  }
+  pageAccessClaims++;
+
+  const claimDesc = isExtractionMode ? "EXTRACTION MODE (*)" : `page ${pageNumber}`;
+  console.log(`✅ [${caller}] Acquired page access: ${claimDesc} (claims: ${pageAccessClaims})`);
+
+  return () => {
+    pageAccessClaims--;
+    const claimDesc = isExtractionMode ? "EXTRACTION MODE (*)" : `page ${pageNumber}`;
+    console.log(
+      `🔓 [${caller}] Releasing page access: ${claimDesc} (claims remaining: ${pageAccessClaims})`
+    );
+
+    if (pageAccessClaims === 0) {
+      // Lock is now free
+      currentPageLocked = null;
+      console.log(`🆓 Page lock released, all access claims are done`);
+      // Wake up any code waiting for page change
+      const waiters = pageChangeWaiters.splice(0);
+      waiters.forEach((resolve) => {
+        resolve();
+      });
+    }
+  };
+}
 
 /**
  * Navigate to a specific page in the accounts table
@@ -349,19 +433,14 @@ export async function getAccountRoles(account: Account | string): Promise<Accoun
     pageNumber = account.pageNumber;
   }
 
-  // Serialise all page navigation through a mutex so concurrent role loads don't race.
-  let releaseLock!: () => void;
-  const lockAcquired = new Promise<void>((resolve) => {
-    releaseLock = resolve;
-  });
-  const previousLock = navigationLock;
-  navigationLock = lockAcquired;
+  // Acquire page access lock for the duration of this operation
+  // This prevents conflicts with concurrent extraction or other role loads on different pages
+  let releasePageAccess: (() => void) | null = null;
 
   try {
-    await previousLock;
-
     // Navigate to the correct page if specified
     if (pageNumber) {
+      releasePageAccess = await acquirePageAccess(pageNumber, `getAccountRoles(${accountId})`);
       await navigateToPage(pageNumber);
     }
 
@@ -488,7 +567,9 @@ export async function getAccountRoles(account: Account | string): Promise<Accoun
     // Shouldn't reach here
     throw new Error(`Failed to load roles for account ${accountId} after ${MAX_RETRIES} attempts`);
   } finally {
-    releaseLock();
+    if (releasePageAccess) {
+      releasePageAccess();
+    }
   }
 }
 
