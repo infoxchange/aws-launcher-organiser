@@ -333,7 +333,7 @@ async function acquirePageAccess(
     const lockedDesc =
       currentPageLocked === "*" ? "EXTRACTION MODE (*)" : `page ${currentPageLocked}`;
     console.log(`⏳ [${caller}] Waiting - ${lockedDesc} is locked`);
-    await new Promise((resolve) => pageChangeWaiters.push(resolve));
+    await new Promise<void>((resolve) => pageChangeWaiters.push(() => resolve()));
   }
 
   // Acquire the lock

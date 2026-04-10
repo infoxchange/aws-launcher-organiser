@@ -414,11 +414,10 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
   );
 
   // Run once on mount: extract all accounts from the AWS SSO page across all pages.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally runs only on mount
   useEffect(() => {
     const loadAccounts = async () => {
       try {
-        const _accounts = await extractAccountsProgressive(
+        await extractAccountsProgressive(
           (status) => {
             console.log(`[AccountTreeTable] Loading status: ${status}`);
             setLoadingStatus(status);
@@ -435,8 +434,6 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
             setExpandedKeys((prev) => ({ ...collectExpandedKeys(grouped), ...prev }));
           }
         );
-        // biome-ignore lint/correctness/noUnusedVariables: Used via callback, kept for completeness
-        void _accounts;
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
         console.error("Failed to extract accounts:", error);
