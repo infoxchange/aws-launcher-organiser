@@ -15,7 +15,7 @@ import {
   type AccountGroupNode,
   type AccountNode,
   type AccountRole,
-  extractAccounts,
+  extractAccountsProgressive,
   getAccountRoles,
   getAccountTree,
 } from "../utils/account-extractor";
@@ -417,11 +417,25 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
   useEffect(() => {
     const loadAccounts = async () => {
       try {
-        const accounts = await extractAccounts((status) => setLoadingStatus(status));
-        rawAccounts.current = accounts;
-        const grouped = getAccountTree(accounts, groups, tags);
-        setNodes(grouped);
-        setExpandedKeys((prev) => ({ ...collectExpandedKeys(grouped), ...prev }));
+        const _accounts = await extractAccountsProgressive(
+          (status) => {
+            console.log(`[AccountTreeTable] Loading status: ${status}`);
+            setLoadingStatus(status);
+          },
+          (pageAccounts) => {
+            // Update rawAccounts with new accounts from this page
+            rawAccounts.current.push(...pageAccounts);
+            console.log(
+              `[AccountTreeTable] Page loaded with ${pageAccounts.length} accounts. Total now: ${rawAccounts.current.length}`
+            );
+            // Re-group with updated accounts and display immediately
+            const grouped = getAccountTree(rawAccounts.current, groups, tags);
+            setNodes(grouped);
+            setExpandedKeys((prev) => ({ ...collectExpandedKeys(grouped), ...prev }));
+          }
+        );
+        // biome-ignore lint/correctness/noUnusedVariables: Used via callback, kept for completeness
+        void _accounts;
       } catch (error) {
         console.error("Failed to extract accounts:", error);
       } finally {
@@ -430,7 +444,7 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
     };
 
     loadAccounts();
-  }, []);
+  }, [groups, tags]);
 
   // Re-group cached accounts whenever groups or tags configuration changes.
   useEffect(() => {
@@ -809,6 +823,11 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
               ))}
             </ButtonGroup>
           )}
+          {isLoading && (
+            <div className="group">
+              <p className="loading-status">{loadingStatus}</p>
+            </div>
+          )}
         </div>
         <div className="group">
           {!autoUpdateEnabled && (
@@ -846,8 +865,8 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
         configError={configError}
         onConfigError={setConfigError}
       />
-      {isLoading ? (
-        <p>{loadingStatus}</p>
+      {nodes.length === 0 && isLoading ? (
+        <p>Waiting for accounts to load...</p>
       ) : nodes.length === 0 ? (
         <p>No accounts found on this page</p>
       ) : (

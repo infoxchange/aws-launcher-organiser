@@ -136,9 +136,12 @@ async function goToNextPage(): Promise<boolean> {
 }
 
 /**
- * Extracts all account information from AWS SSO start page across all pages
+ * Extracts account information progressively, calling onAccountsFound for each page of accounts
  */
-export async function extractAccounts(onProgress?: (status: string) => void): Promise<Account[]> {
+export async function extractAccountsProgressive(
+  onProgress?: (status: string) => void,
+  onAccountsFound?: (accounts: Account[]) => void
+): Promise<Account[]> {
   const allAccounts: Account[] = [];
   let pageNumber = 1;
   const maxPages = 100; // Safety limit to prevent infinite loops
@@ -152,34 +155,41 @@ export async function extractAccounts(onProgress?: (status: string) => void): Pr
       15000
     );
   } catch {
-    console.warn("[extractAccounts] Timed out waiting for account rows to appear in DOM");
+    console.warn(
+      "[extractAccountsProgressive] Timed out waiting for account rows to appear in DOM"
+    );
     return [];
   }
 
   try {
     while (pageNumber <= maxPages) {
+      console.log(`[extractAccountsProgressive] Starting to load page ${pageNumber}...`);
+
       document.querySelectorAll('table[role="treegrid"] tr');
       document.querySelectorAll('table[role="treegrid"] tr[data-selection-item="item"]');
 
       onProgress?.(`Loading page ${pageNumber}… (${allAccounts.length} accounts so far)`);
       const pageAccounts = extractAccountsFromCurrentPage(pageNumber);
       allAccounts.push(...pageAccounts);
-
-      console.log(`[extractAccounts] Page ${pageNumber}: Found ${pageAccounts.length} accounts`);
+      console.log(
+        `[extractAccountsProgressive] Page ${pageNumber}: Found ${pageAccounts.length} accounts. Total so far: ${allAccounts.length}`
+      );
+      onAccountsFound?.(pageAccounts);
 
       if (!hasNextPage()) {
-        console.log("[extractAccounts] No more pages available");
+        console.log("[extractAccountsProgressive] No more pages available - pagination complete");
         break;
       }
 
+      console.log(`[extractAccountsProgressive] Moving to page ${pageNumber + 1}...`);
       await goToNextPage();
       pageNumber++;
     }
   } catch (error) {
-    console.error("[extractAccounts] Error extracting accounts:", error);
+    console.error("[extractAccountsProgressive] Error extracting accounts:", error);
   }
 
-  console.log(`[extractAccounts] Total accounts extracted: ${allAccounts.length}`);
+  console.log(`[extractAccountsProgressive] ✓ Total accounts extracted: ${allAccounts.length}`);
   return allAccounts;
 }
 
