@@ -6,7 +6,8 @@ export default defineConfig({
     description: "Organize AWS accounts on the launcher page",
     version: "0.0.0", // This is set when releasing
     permissions: ["storage", "alarms"],
-    host_permissions: ["<all_urls>"],
+    host_permissions: [],
+    optional_host_permissions: ["<all_urls>"],
     browser_specific_settings: {
       gecko: {
         id: "@aws-launcher-organiser",

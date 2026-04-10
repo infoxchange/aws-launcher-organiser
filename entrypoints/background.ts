@@ -1,5 +1,6 @@
 import { defineBackground } from "wxt/utils/define-background";
 import { RemoteConfigSchema, STORAGE_KEY } from "../src/utils/configStore";
+import { getHostPermissionPattern } from "../src/utils/permissions";
 
 const ALARM_NAME = "auto-update-config";
 const imageCache = new Map<string, string>();
@@ -33,6 +34,27 @@ async function checkForConfigUpdates() {
 
   const { state, version } = stored;
   if (!state.autoUpdateEnabled || !state.autoUpdateUrl) return;
+
+  // Request permission for the URL before attempting to fetch
+  const pattern = getHostPermissionPattern(state.autoUpdateUrl);
+  const hasPermission = await new Promise<boolean>((resolve) => {
+    chrome.permissions.contains({ origins: [pattern] }, (result) => {
+      resolve(result === true);
+    });
+  });
+
+  if (!hasPermission) {
+    const granted = await new Promise<boolean>((resolve) => {
+      chrome.permissions.request({ origins: [pattern] }, (result) => {
+        resolve(result === true);
+      });
+    });
+
+    if (!granted) {
+      console.warn("[auto-update] Permission denied for URL:", state.autoUpdateUrl);
+      return;
+    }
+  }
 
   const headers: Record<string, string> = {};
   if (state.autoUpdateAuthToken) {
@@ -101,8 +123,54 @@ export default defineBackground({
   main() {
     console.log("Background service worker loaded");
 
-    // Handle message from content scripts
+    // Handle permission-related messages from UI components
     chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+      if (message.type === "CHECK_URL_PERMISSION") {
+        try {
+          const pattern = getHostPermissionPattern(message.url);
+          console.log(`[permissions] Checking permission for: ${pattern}`);
+          chrome.permissions.contains({ origins: [pattern] }, (result) => {
+            console.log(`[permissions] Check result for ${pattern}:`, result);
+            if (chrome.runtime.lastError) {
+              console.error(`[permissions] Check error:`, chrome.runtime.lastError);
+              sendResponse({ hasPermission: false, error: chrome.runtime.lastError.message });
+            } else {
+              sendResponse({ hasPermission: result === true });
+            }
+          });
+        } catch (error) {
+          console.error(`[permissions] Check exception:`, error);
+          sendResponse({
+            hasPermission: false,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+        return true; // indicate we'll send a response asynchronously
+      }
+
+      if (message.type === "REQUEST_URL_PERMISSION") {
+        try {
+          const pattern = getHostPermissionPattern(message.url);
+          console.log(`[permissions] Requesting permission for: ${pattern}`);
+          chrome.permissions.request({ origins: [pattern] }, (granted) => {
+            console.log(`[permissions] Request result for ${pattern}:`, granted);
+            if (chrome.runtime.lastError) {
+              console.error(`[permissions] Request error:`, chrome.runtime.lastError);
+              sendResponse({ granted: false, error: chrome.runtime.lastError.message });
+            } else {
+              sendResponse({ granted: granted === true });
+            }
+          });
+        } catch (error) {
+          console.error(`[permissions] Request exception:`, error);
+          sendResponse({
+            granted: false,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+        return true; // indicate we'll send a response asynchronously
+      }
+
       if (message.type === "FETCH_IMAGE") {
         fetchImageAsDataUrl(message.src)
           .then((dataUrl) => {

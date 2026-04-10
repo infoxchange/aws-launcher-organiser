@@ -9,6 +9,7 @@ import type React from "react";
 import { useState } from "react";
 import type { SortConfig, TagConfig } from "../utils/configStore";
 import { formatConfig, RemoteConfigSchema, useConfigStore } from "../utils/configStore";
+import { ensureUrlPermission } from "../utils/permissions";
 import { SortingSettings } from "./SortingSettings";
 import { TagSettings } from "./TagSettings";
 import "./SettingsDialog.css";
@@ -141,6 +142,14 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
     setTestStatus("loading");
     setTestMessage(null);
     try {
+      // Request permission for the URL before attempting to fetch
+      const hasPermission = await ensureUrlPermission(draftAutoUpdateUrl);
+      if (!hasPermission) {
+        setTestStatus("error");
+        setTestMessage("Permission denied for this URL");
+        return;
+      }
+
       const headers: Record<string, string> = {};
       if (draftAutoUpdateAuthToken) headers.Authorization = `Bearer ${draftAutoUpdateAuthToken}`;
       const response = await fetch(draftAutoUpdateUrl, { headers });
@@ -173,7 +182,8 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
       onConfigChange(JSON.stringify(formatConfig(result.data), null, 2));
     } catch (err) {
       setTestStatus("error");
-      setTestMessage(`Fetch failed: ${err instanceof Error ? err.message : String(err)}`);
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      setTestMessage(`Error: ${errorMsg}`);
     }
   };
 
@@ -311,13 +321,13 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                 className="json-textarea"
                 readOnly={draftAutoUpdateEnabled}
               />
-              {configError && <div className="config-error">{configError}</div>}
             </div>
           </Fieldset>
+          {configError && <div className="config-error">{configError}</div>}
           <div className="dialog-buttons">
             <Button
               label="Save"
-              onClick={() => {
+              onClick={async () => {
                 try {
                   const parsed = JSON.parse(jsonConfig);
                   const validated = RemoteConfigSchema.parse(parsed);
@@ -328,6 +338,21 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                     setAutoUpdateAuthToken,
                     setShowOriginalList,
                   } = useConfigStore.getState();
+
+                  // Request permission if auto-update is enabled with a URL
+                  if (draftAutoUpdateEnabled && draftAutoUpdateUrl) {
+                    try {
+                      await ensureUrlPermission(draftAutoUpdateUrl);
+                    } catch (permissionError) {
+                      const errorMsg =
+                        permissionError instanceof Error
+                          ? permissionError.message
+                          : String(permissionError);
+                      onConfigError(`Permission error: ${errorMsg}`);
+                      return;
+                    }
+                  }
+
                   setConfig(validated);
                   setAutoUpdateEnabled(draftAutoUpdateEnabled);
                   setAutoUpdateUrl(draftAutoUpdateUrl);
