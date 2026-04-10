@@ -385,6 +385,29 @@
   .group-content-editable .group-description:hover {
     background-color: rgba(59, 130, 246, 0.2);
   }
+
+  .error-container,
+  .no-accounts-container {
+    padding: 1rem;
+    margin: 1rem 0;
+    border-left: 4px solid #f87171;
+    background-color: #fef2f2;
+    border-radius: 4px;
+  }
+
+  .error-message {
+    color: #991b1b;
+    margin: 0.5rem 0;
+    font-weight: 500;
+  }
+
+  .error-fallback,
+  .original-list-fallback {
+    color: #7f1d1d;
+    margin: 0.5rem 0 0 0;
+    font-size: 0.875rem;
+    font-style: italic;
+  }
 }
 
 @keyframes fade-in-delayed {

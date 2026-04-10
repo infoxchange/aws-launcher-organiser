@@ -190,6 +190,7 @@ export async function extractAccountsProgressive(
     }
   } catch (error) {
     console.error("[extractAccountsProgressive] Error extracting accounts:", error);
+    throw error;
   }
 
   console.log(`[extractAccountsProgressive] ✓ Total accounts extracted: ${allAccounts.length}`);

@@ -378,6 +378,7 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
   const [configError, setConfigError] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [editingGroupKey, setEditingGroupKey] = useState<string | null>(null);
+  const [accountsError, setAccountsError] = useState<string | null>(null);
 
   useEffect(() => {
     if (autoUpdateEnabled) {
@@ -437,7 +438,9 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
         // biome-ignore lint/correctness/noUnusedVariables: Used via callback, kept for completeness
         void _accounts;
       } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
         console.error("Failed to extract accounts:", error);
+        setAccountsError(errorMsg);
       } finally {
         setIsLoading(false);
       }
@@ -794,8 +797,11 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
     return filtered;
   })();
 
+  const shouldShowOriginalList =
+    showOriginalList || accountsError !== null || (nodes.length === 0 && !isLoading);
+
   return (
-    <div id="aws-account-tree-table" className={showOriginalList ? "show-original-list" : ""}>
+    <div id="aws-account-tree-table" className={shouldShowOriginalList ? "show-original-list" : ""}>
       <div className="filter-controls">
         <div className="group">
           <input
@@ -865,10 +871,18 @@ export const AccountTreeTable: React.FC<AccountTreeTableProps> = () => {
         configError={configError}
         onConfigError={setConfigError}
       />
-      {nodes.length === 0 && isLoading ? (
+      {accountsError !== null ? (
+        <div className="error-container">
+          <p className="error-message">Failed to load accounts: {accountsError}</p>
+          <p className="error-fallback">Showing original AWS account list below.</p>
+        </div>
+      ) : nodes.length === 0 && isLoading ? (
         <p>Waiting for accounts to load...</p>
       ) : nodes.length === 0 ? (
-        <p>No accounts found on this page</p>
+        <div className="no-accounts-container">
+          <p>No accounts found on this page</p>
+          <p className="original-list-fallback">Showing original AWS account list below.</p>
+        </div>
       ) : (
         <>
           <Tree
