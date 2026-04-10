@@ -163,6 +163,9 @@ export async function extractAccountsProgressive(
 
   try {
     while (pageNumber <= maxPages) {
+      // Wait for any "Loading accounts" indicator inside the treegrid to disappear
+      await waitForLoadingToComplete('table[role="treegrid"]');
+
       console.log(`[extractAccountsProgressive] Starting to load page ${pageNumber}...`);
 
       document.querySelectorAll('table[role="treegrid"] tr');
@@ -197,6 +200,44 @@ export interface AccountRole {
   name: string;
   consoleUrl: string;
   accessKeysElement?: HTMLElement;
+}
+
+/**
+ * Wait until no element within the given selector contains the text "Loading accounts"
+ */
+function waitForLoadingToComplete(containerSelector: string, timeout = 10000): Promise<void> {
+  return new Promise((resolve) => {
+    const isLoading = () => {
+      const container = document.querySelector(containerSelector);
+      if (!container) return false;
+      return container.textContent?.includes("Loading accounts") ?? false;
+    };
+
+    if (!isLoading()) {
+      resolve();
+      return;
+    }
+
+    console.log("[extractAccountsProgressive] Waiting for loading indicator to disappear...");
+    const startTime = Date.now();
+
+    const observer = new MutationObserver(() => {
+      if (!isLoading() || Date.now() - startTime > timeout) {
+        observer.disconnect();
+        resolve();
+      }
+    });
+
+    const container = document.querySelector(containerSelector);
+    if (container) {
+      observer.observe(container, { childList: true, subtree: true, characterData: true });
+    }
+
+    setTimeout(() => {
+      observer.disconnect();
+      resolve();
+    }, timeout);
+  });
 }
 
 /**
