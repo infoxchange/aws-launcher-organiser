@@ -2,3 +2,5 @@ stats.html
 stats-*.json
 .output/
 .wxt/
+# Captured AWS markup — third-party HTML/CSS we must not reformat
+tests/fixtures/

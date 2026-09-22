@@ -81,3 +81,32 @@ jobs:
 
       - name: Run tests
         run: npm run test
+
+  simulated:
+    name: Simulated browser tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get node version
+        id: get-node-version
+        shell: bash
+        run: echo "node-version=$(jq -r '.engines.node // "lts/*"' package.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.get-node-version.outputs.node-version }}
+
+      - name: Install project packages
+        run: npm clean-install
+
+      - name: Verify fixtures contain no real account data
+        run: npm run fixture:verify-clean
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium firefox
+
+      - name: Run simulated browser tests
+        run: npm run test:simulated

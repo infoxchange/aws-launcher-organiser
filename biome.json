@@ -31,7 +31,7 @@
   },
   "overrides": [
     {
-      "includes": [".output/**", ".wxt/**"],
+      "includes": [".output/**", ".wxt/**", "tests/fixtures/**"],
       "linter": {
         "enabled": false
       },

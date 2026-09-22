@@ -22,12 +22,19 @@
     "test:integration:setup": "tsx scripts/setup-integration-tests.ts",
     "test:integration": "npm run build:chrome && vitest --config vitest.integration.config.ts --run tests/integration/",
     "test:integration:watch": "npm run build:chrome && vitest --config vitest.integration.config.ts tests/integration/",
-    "test:integration:clear-cookies": "node -e \"import('./src/utils/test-cookies.ts').then(m => m.clearCookies()) && console.log('✓ Cookies cleared')\"",
+    "test:integration:auto-update": "npm run build:chrome && vitest --config vitest.integration.config.ts --run tests/integration/auto-update.test.ts",
+    "test:integration:clear-cookies": "node -e \"import('./tests/support/test-cookies.ts').then(m => m.clearCookies()) && console.log('\u2713 Cookies cleared')\"",
+    "test:simulated": "npm run build:all && vitest --config vitest.simulated.config.ts --run",
+    "test:simulated:chrome": "npm run build:chrome && FIXTURE_BROWSERS=chrome vitest --config vitest.simulated.config.ts --run",
+    "test:live": "npm run build:all && vitest --config vitest.live.config.ts --run",
+    "fixture:capture": "tsx scripts/capture-fixture.ts",
+    "fixture:sanitise": "tsx scripts/sanitise-fixture.ts",
+    "fixture:verify-clean": "tsx scripts/verify-fixture-clean.ts",
+    "fixture:check": "tsx scripts/check-fixture-drift.ts",
     "generate-schema": "tsx scripts/generate-schema.ts",
     "lint-staged": "lint-staged"
   },
   "dependencies": {
-    "playwright": "^1.59.1",
     "primeicons": "^7.0.0",
     "primereact": "^10.9.0",
     "react": "^19.2.3",
@@ -53,24 +60,14 @@
     "happy-dom": "^20.8.4",
     "husky": "^9.1.7",
     "lint-staged": "^16.4.0",
+    "playwright": "^1.59.1",
+    "playwright-webextext": "^0.0.5",
     "semantic-release": "^25.0.3",
-    "tsc-files": "^1.1.4",
+    "tslib": "^2.8.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^4.1.0",
     "wxt": "^0.20.19"
-  },
-  "lint-staged": {
-    "*.{ts,tsx,js,jsx}": [
-      "biome check --verbose --error-on-warnings --write",
-      "tsc-files --noEmit"
-    ],
-    "*.json": [
-      "biome format --write"
-    ],
-    "*": [
-      "npm run generate-schema -- && git add config-schema.json || true"
-    ]
   },
   "private": true
 }

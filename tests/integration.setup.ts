@@ -12,9 +12,9 @@ import {
   navigateToUrl,
   showBrowserForLogin,
   waitForLoginCompletion,
-} from "../src/utils/test-browser";
-import { loadConfig } from "../src/utils/test-config";
-import { loadCookies, saveCookies } from "../src/utils/test-cookies";
+} from "./support/test-browser";
+import { loadConfig } from "./support/test-config";
+import { loadCookies, saveCookies } from "./support/test-cookies";
 
 /**
  * Global test context that persists across tests in a file

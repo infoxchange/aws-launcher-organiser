@@ -7,7 +7,7 @@
  */
 
 import { createInterface } from "node:readline";
-import { getExpectedAccountCount, getSsoUrl, loadConfig } from "../src/utils/test-config";
+import { getExpectedAccountCount, getSsoUrl, loadConfig } from "../tests/support/test-config";
 
 async function main() {
   console.log("\n🔧 AWS Launcher Organiser - Integration Test Setup\n");

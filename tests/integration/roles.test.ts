@@ -5,7 +5,7 @@
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { IntegrationTestContext } from "../integration.setup";
-import { cleanupTestContext, createTestContext } from "../integration.setup";
+import { cleanupTestContext, closeBrowser, createTestContext } from "../integration.setup";
 
 describe("AWS Launcher Organiser Extension - Role Loading Tests", () => {
   let ctx: IntegrationTestContext;
@@ -18,6 +18,7 @@ describe("AWS Launcher Organiser Extension - Role Loading Tests", () => {
     if (ctx) {
       await cleanupTestContext(ctx);
     }
+    await closeBrowser();
   });
 
   it("should create a group with a regex matcher and show exactly the matching account, with roles loading", async () => {

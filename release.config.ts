@@ -51,6 +51,8 @@ const config: Options = {
           { type: "ci", release: "patch" },
           { type: "refactor", release: "patch" },
           { type: "chore", release: "patch" },
+          { type: "style", release: "patch" },
+          // "wip" commits are only allowed on prerelease branches
           { type: "wip", release: "patch" },
           { type: "docs", scope: "help-text", release: "patch" },
           { type: "test", release: false },

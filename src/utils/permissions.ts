@@ -1,6 +1,12 @@
 /**
  * Utility functions for managing dynamic host permissions
- * These use message passing to communicate with the background service worker
+ *
+ * @see docs/permissions.md § "Requests go through the background script"
+ * Uses message passing to communicate with background script for permission checks/requests
+ * This is necessary because browser.permissions API is not available in content scripts
+ *
+ * Note on Firefox: Permission dialogs may not appear in controlled/headless Firefox (e.g., with Playwright)
+ * In such cases, we proceed with the fetch anyway since optional_host_permissions are pre-declared
  */
 
 /**
@@ -18,69 +24,105 @@ export function getHostPermissionPattern(url: string): string {
 }
 
 /**
- * Request permission for a specific URL via the background service worker
- * @param url - The URL to request permission for
- * @returns Promise<boolean> - true if permission was granted, false if denied
- * @throws Error if permission request fails
+ * Send a message to the background script
+ * @param message The message to send
+ * @returns Promise resolving to the response, or undefined if the handler sent none
  */
-export async function requestUrlPermission(url: string): Promise<boolean> {
+async function sendBackgroundMessage<T>(message: unknown): Promise<T | undefined> {
   return new Promise((resolve, reject) => {
-    try {
-      chrome.runtime.sendMessage(
-        { type: "REQUEST_URL_PERMISSION", url },
-        (response: { granted?: boolean; error?: string } | undefined) => {
-          if (chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message));
-          } else if (response?.error) {
-            reject(new Error(response.error));
-          } else {
-            resolve(response?.granted === true);
-          }
-        }
-      );
-    } catch (error) {
-      reject(error);
-    }
+    chrome.runtime.sendMessage(message, (response) => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        resolve(response);
+      }
+    });
   });
 }
 
 /**
- * Check if permission already exists for a URL via the background service worker
+ * Request permission for a specific URL.
+ * Must be called directly from a user input handler (e.g. button click) to satisfy
+ * browser requirements, particularly Firefox.
+ * @param url - The URL to request permission for
+ * @returns Promise<boolean> - true if permission was granted, false otherwise
+ */
+export async function requestUrlPermission(url: string): Promise<boolean> {
+  const pattern = getHostPermissionPattern(url);
+  console.log("[permissions] Requesting permission for:", pattern);
+  try {
+    const response = await sendBackgroundMessage<{ granted?: boolean }>({
+      type: "REQUEST_PERMISSION",
+      pattern,
+    });
+    console.log("[permissions] Permission response:", response);
+    const granted = response?.granted ?? false;
+    console.log("[permissions] Permission granted:", granted);
+    return granted;
+  } catch (err) {
+    console.error(
+      "[permissions] Permission request failed (may be normal in headless Firefox):",
+      err
+    );
+    return false;
+  }
+}
+
+/**
+ * Check if permission already exists for a URL.
  * @param url - The URL to check permission for
  * @returns Promise<boolean> - true if permission exists, false otherwise
- * @throws Error if permission check fails
  */
 export async function hasUrlPermission(url: string): Promise<boolean> {
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      reject(new Error("Permission check timed out - background service worker did not respond"));
-    }, 5000);
+  const pattern = getHostPermissionPattern(url);
+  try {
+    const response = await sendBackgroundMessage<{ hasPermission?: boolean }>({
+      type: "CHECK_PERMISSION",
+      pattern,
+    });
+    return response?.hasPermission ?? false;
+  } catch (err) {
+    console.error("[permissions] Failed to check permission:", err);
+    return false;
+  }
+}
 
-    try {
-      chrome.runtime.sendMessage(
-        { type: "CHECK_URL_PERMISSION", url },
-        (response: { hasPermission?: boolean; error?: string } | undefined) => {
-          clearTimeout(timeout);
-          if (chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message));
-          } else if (response?.error) {
-            reject(new Error(response.error));
-          } else {
-            resolve(response?.hasPermission === true);
-          }
-        }
-      );
-    } catch (error) {
-      clearTimeout(timeout);
-      reject(error);
-    }
-  });
+/**
+ * Test a connection to a remote config URL
+ * Delegates to background script to perform fetch with proper permissions
+ * @param url - The URL to test
+ * @param authToken - Optional bearer token
+ * @returns Promise with validation result
+ */
+export async function testRemoteConfigUrl(
+  url: string,
+  authToken?: string
+): Promise<{ success: boolean; data?: unknown; error?: string }> {
+  try {
+    const response = await sendBackgroundMessage<{
+      success: boolean;
+      data?: unknown;
+      error?: string;
+    }>({
+      type: "TEST_REMOTE_CONFIG",
+      url,
+      authToken,
+    });
+    return response ?? { success: false, error: "No response from background" };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
 }
 
 /**
  * Ensure permission exists for a URL, requesting it if necessary
+ * In headless/controlled browsers (e.g., Playwright Firefox), permission dialogs don't appear,
+ * but the fetch may still work with optional_host_permissions pre-declared in the manifest
  * @param url - The URL to ensure permission for
- * @returns Promise<boolean> - true if permission exists or was granted, false if denied
+ * @returns Promise<boolean> - true if permission exists or was granted, false otherwise
  */
 export async function ensureUrlPermission(url: string): Promise<boolean> {
   const hasPermission = await hasUrlPermission(url);
@@ -88,5 +130,8 @@ export async function ensureUrlPermission(url: string): Promise<boolean> {
     return true;
   }
 
-  return requestUrlPermission(url);
+  // Try to request permission, but don't fail if it doesn't work
+  // (may not appear in headless Firefox, but fetch might still succeed)
+  const granted = await requestUrlPermission(url);
+  return granted;
 }

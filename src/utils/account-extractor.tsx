@@ -1,6 +1,26 @@
 import type { TreeNode } from "primereact/treenode";
 import type { IconType } from "primereact/utils";
 import { BackgroundLoadedImage } from "../components/BackgroundLoadedImage";
+import {
+  decideNavigationStep,
+  describeBrokenSelectors,
+  extractAccountsFromPage,
+  findAccountRowById,
+  getAccountRows,
+  getErrorAlert,
+  getErrorMessage,
+  getRetryButton,
+  getRoleRowFor,
+  getRowExpandButton,
+  hasPaginationControls,
+  isRowExpanded,
+  parseRoles,
+  getCurrentPageNumber as readCurrentPageNumber,
+  hasNextPage as readHasNextPage,
+  hasPrevPage as readHasPrevPage,
+  isLoading as readIsLoading,
+} from "./aws-page/parse";
+import { selectors } from "./aws-page/selectors";
 import type { Group, TagConfig } from "./configStore";
 
 /**
@@ -35,16 +55,26 @@ export interface AccountNode extends TreeNode {
 /**
  * Get the current page number from pagination controls
  */
-function getCurrentPageNumber(): number {
-  // AWS SSO uses aria-current="true" on the active page button (not the standard "page" value)
-  const activePage = document.querySelector<HTMLElement>(
-    'button[aria-label^="Page"][aria-current="true"]:not(#aws-account-tree-table *)'
-  );
-  if (activePage) {
-    const num = parseInt(activePage.textContent ?? "", 10);
-    if (!Number.isNaN(num)) return num;
+function getCurrentPageNumber(): number | null {
+  return readCurrentPageNumber(document);
+}
+
+/**
+ * Wait for the pagination controls to be usable, i.e. present and reporting a current page.
+ *
+ * They vanish briefly whenever the portal re-renders after a page change. Acting during that
+ * window is what made navigation give up on the wrong page.
+ */
+async function waitForPaginationReady(timeout = 5000): Promise<number | null> {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    if (hasPaginationControls(document)) {
+      const current = getCurrentPageNumber();
+      if (current !== null) return current;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  return 1;
+  return null;
 }
 
 /**
@@ -52,84 +82,147 @@ function getCurrentPageNumber(): number {
  * The accounts are displayed in a table with 3 columns: Name (TH), ID (TD), Email (TD)
  */
 function extractAccountsFromCurrentPage(pageNumber: number): Account[] {
-  const accounts: Account[] = [];
-
-  // Get all table rows in the accounts table
-  // The table has role="treegrid" and contains rows with data-selection-item="item"
-  const rows = document.querySelectorAll('table[role="treegrid"] tr[data-selection-item="item"]');
-
-  rows.forEach((row, _idx) => {
-    // Each row has 3 cells:
-    // 1. TH element with account name (in a div with data-testid="account-list-cell")
-    // 2. TD element with account ID (in a span)
-    // 3. TD element with email address
-    const nameCell = row.querySelector("th");
-    const cells = Array.from(row.querySelectorAll("td"));
-
-    if (nameCell && cells.length >= 2) {
-      // Extract account name from TH cell
-      const nameElement = nameCell.querySelector('[data-testid="account-list-cell"]');
-      const name = nameElement?.textContent?.trim();
-
-      // Extract account ID from first TD cell
-      const id = cells[0]?.textContent?.trim();
-
-      // Extract email from second TD cell
-      const email = cells[1]?.textContent?.trim();
-
-      if (id && name && email) {
-        accounts.push({
-          id,
-          name,
-          email,
-          pageNumber,
-        });
-      }
-    }
-  });
-
-  return accounts;
+  return extractAccountsFromPage(document, pageNumber);
 }
 
 /**
  * Check if there's a next page available
  */
 function hasNextPage(): boolean {
-  const nextButton = document.querySelector('button[aria-label="Next page"]:not([disabled])');
-  return !!nextButton && !nextButton.hasAttribute("disabled");
+  return readHasNextPage(document);
 }
 
 /**
- * Click the next page button and wait for page to load
+ * Wait until the portal has finished rendering its first page.
+ *
+ * The account list and the pagination controls appear progressively, and extraction used to
+ * start as soon as the first row existed. That produced two failures at once on a real portal:
+ * a truncated account list (99 of 100 rows), and — because the pagination controls had not
+ * rendered yet — `hasNextPage()` seeing no Next button and concluding there were no further
+ * pages, so extraction stopped after page one.
+ *
+ * Readiness means: not showing the loading indicator, a stable row count, and pagination
+ * present. If the portal never settles we extract anyway rather than hanging, but say so.
+ */
+async function waitForPortalReady(timeout = 30000): Promise<void> {
+  const pollMs = 250;
+  const requiredStableMs = 1000;
+  const start = Date.now();
+
+  let lastCount = -1;
+  let stableMs = 0;
+
+  while (Date.now() - start < timeout) {
+    const loading = readIsLoading(document);
+    const count = getAccountRows(document).length;
+    const paginationReady = hasPaginationControls(document);
+
+    if (!loading && count > 0 && count === lastCount && paginationReady) {
+      stableMs += pollMs;
+      if (stableMs >= requiredStableMs) {
+        console.log(`[waitForPortalReady] Portal settled: ${count} rows, pagination present`);
+        return;
+      }
+    } else {
+      stableMs = 0;
+    }
+
+    lastCount = count;
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+  }
+
+  console.warn(
+    `[waitForPortalReady] Portal did not settle within ${timeout}ms ` +
+      `(rows=${lastCount}, pagination=${hasPaginationControls(document)}). Extracting anyway.`
+  );
+}
+
+/**
+ * Identifier for the accounts currently displayed, used to detect that pagination actually
+ * moved. The first row's text alone is not enough: two pages can share a first row while the
+ * rest differs, and more importantly a click that does nothing leaves it identical.
+ */
+function getPageFingerprint(): string {
+  return extractAccountsFromPage(document, 0)
+    .map((account) => account.id)
+    .join(",");
+}
+
+/**
+ * Click the next page button and wait for the account list to actually change.
+ *
+ * @see docs/aws-page-integration.md § "Pagination must prove it moved"
+ *
+ * Returns false if there was no next page, or if the list never changed — the caller must treat
+ * that as "pagination is finished" rather than retrying. Previously this resolved `true` on
+ * timeout, so a click that did nothing looked like a successful page turn and extraction kept
+ * re-scraping the same page.
  */
 async function goToNextPage(): Promise<boolean> {
-  const nextButton = document.querySelector<HTMLButtonElement>('button[aria-label="Next page"]');
-
-  if (!nextButton || nextButton.hasAttribute("disabled")) {
+  if (!hasNextPage()) {
     return false;
   }
 
-  // Capture the text of the first account on the current page so we can detect when it changes
-  const firstRowText =
-    document.querySelector('table[role="treegrid"] tr[data-selection-item="item"] th')
-      ?.textContent ?? "";
+  const nextButton = document.querySelector<HTMLButtonElement>(selectors.nextPageButton);
+  if (!nextButton) {
+    return false;
+  }
 
+  const before = getPageFingerprint();
   nextButton.click();
 
-  // Wait for the page to update by detecting that the first row's content has changed
   return new Promise((resolve) => {
     const maxWait = 5000;
     const startTime = Date.now();
 
     const checkInterval = setInterval(() => {
-      const currentFirstRowText =
-        document.querySelector('table[role="treegrid"] tr[data-selection-item="item"] th')
-          ?.textContent ?? "";
-
-      // Page has updated when the first row text changes, or fall back to maxWait
-      if (currentFirstRowText !== firstRowText || Date.now() - startTime > maxWait) {
+      if (getPageFingerprint() !== before) {
         clearInterval(checkInterval);
         resolve(true);
+        return;
+      }
+      if (Date.now() - startTime > maxWait) {
+        clearInterval(checkInterval);
+        console.warn(
+          "[goToNextPage] Account list did not change after clicking Next — treating pagination as complete"
+        );
+        resolve(false);
+      }
+    }, 100);
+  });
+}
+
+/**
+ * Click the previous page button and wait for the account list to actually change.
+ * Mirrors goToNextPage, including returning false when nothing moved.
+ */
+async function goToPrevPage(): Promise<boolean> {
+  if (!readHasPrevPage(document)) {
+    return false;
+  }
+
+  const prevButton = document.querySelector<HTMLButtonElement>(selectors.prevPageButton);
+  if (!prevButton) {
+    return false;
+  }
+
+  const before = getPageFingerprint();
+  prevButton.click();
+
+  return new Promise((resolve) => {
+    const maxWait = 5000;
+    const startTime = Date.now();
+
+    const interval = setInterval(() => {
+      if (getPageFingerprint() !== before) {
+        clearInterval(interval);
+        resolve(true);
+        return;
+      }
+      if (Date.now() - startTime > maxWait) {
+        clearInterval(interval);
+        console.warn("[goToPrevPage] Account list did not change after clicking Previous");
+        resolve(false);
       }
     }, 100);
   });
@@ -151,16 +244,16 @@ export async function extractAccountsProgressive(
   try {
     // Wait for account rows to appear - they may not be in the DOM immediately
     onProgress?.("Waiting for accounts to appear on the page...");
-    await waitForAnyElement(
-      document.body,
-      ['table[role="treegrid"] tr[data-selection-item="item"]'],
-      15000
-    );
+    await waitForAnyElement(document.body, [selectors.anyItemRow], 15000);
   } catch {
-    console.warn(
-      "[extractAccountsProgressive] Timed out waiting for account rows to appear in DOM"
-    );
-    return [];
+    // Name the selector that stopped matching. AWS rewrites this page without notice, and
+    // "no accounts found" on its own gives a bug report nothing to go on.
+    const broken = describeBrokenSelectors(document);
+    const detail = broken
+      ? `The AWS page structure has changed — these selectors no longer match: ${broken}`
+      : "Timed out waiting for account rows to appear on the AWS page";
+    console.warn(`[extractAccountsProgressive] ${detail}`);
+    throw new Error(detail);
   }
 
   // Acquire extraction mode lock for the entire extraction process
@@ -170,22 +263,50 @@ export async function extractAccountsProgressive(
   try {
     releaseExtractionLock = await acquirePageAccess("*", "extractAccountsProgressive");
 
+    onProgress?.("Waiting for the account list to finish loading…");
+    await waitForPortalReady();
+
+    // Accounts are deduplicated by id. AWS pagination cannot be fully trusted — if a page turn
+    // silently fails we would otherwise scrape the same page repeatedly and report a total far
+    // higher than the real account count.
+    const seenIds = new Set<string>();
+
     while (pageNumber <= maxPages) {
       // Wait for any "Loading accounts" indicator inside the treegrid to disappear
-      await waitForLoadingToComplete('table[role="treegrid"]');
+      await waitForLoadingToComplete();
 
       console.log(`[extractAccountsProgressive] Starting to load page ${pageNumber}...`);
 
-      document.querySelectorAll('table[role="treegrid"] tr');
-      document.querySelectorAll('table[role="treegrid"] tr[data-selection-item="item"]');
-
       onProgress?.(`Loading page ${pageNumber}… (${allAccounts.length} accounts so far)`);
       const pageAccounts = extractAccountsFromCurrentPage(pageNumber);
-      allAccounts.push(...pageAccounts);
+      const newAccounts = pageAccounts.filter((account) => !seenIds.has(account.id));
+      for (const account of newAccounts) {
+        seenIds.add(account.id);
+      }
+      allAccounts.push(...newAccounts);
+
       console.log(
-        `[extractAccountsProgressive] Page ${pageNumber}: Found ${pageAccounts.length} accounts. Total so far: ${allAccounts.length}`
+        `[extractAccountsProgressive] Page ${pageNumber}: Found ${pageAccounts.length} accounts ` +
+          `(${newAccounts.length} new). Total so far: ${allAccounts.length}`
       );
-      onAccountsFound?.(pageAccounts);
+
+      if (newAccounts.length > 0) {
+        onAccountsFound?.(newAccounts);
+      }
+
+      // Belt and braces: even if the pagination controls claim another page exists, a page that
+      // contributes nothing new means we are going in circles.
+      if (pageAccounts.length > 0 && newAccounts.length === 0) {
+        console.warn(
+          `[extractAccountsProgressive] Page ${pageNumber} contained only accounts already seen — stopping`
+        );
+        break;
+      }
+
+      // Re-check readiness first: the pagination controls disappear briefly while the portal
+      // re-renders after a page turn, and a missing Next button is indistinguishable from a
+      // disabled one. Without this, extraction can stop early believing it reached the end.
+      await waitForPaginationReady();
 
       if (!hasNextPage()) {
         console.log("[extractAccountsProgressive] No more pages available - pagination complete");
@@ -193,8 +314,22 @@ export async function extractAccountsProgressive(
       }
 
       console.log(`[extractAccountsProgressive] Moving to page ${pageNumber + 1}...`);
-      await goToNextPage();
+      const moved = await goToNextPage();
+      if (!moved) {
+        console.warn(
+          "[extractAccountsProgressive] Could not advance past " +
+            `page ${pageNumber} — stopping pagination`
+        );
+        break;
+      }
       pageNumber++;
+    }
+
+    if (pageNumber > maxPages) {
+      console.warn(
+        `[extractAccountsProgressive] Hit the ${maxPages}-page safety limit. ` +
+          "This usually means the pagination controls changed shape again."
+      );
     }
   } catch (error) {
     console.error("[extractAccountsProgressive] Error extracting accounts:", error);
@@ -219,13 +354,9 @@ export interface AccountRole {
 /**
  * Wait until no element within the given selector contains the text "Loading accounts"
  */
-function waitForLoadingToComplete(containerSelector: string, timeout = 10000): Promise<void> {
+function waitForLoadingToComplete(timeout = 10000): Promise<void> {
   return new Promise((resolve) => {
-    const isLoading = () => {
-      const container = document.querySelector(containerSelector);
-      if (!container) return false;
-      return container.textContent?.includes("Loading accounts") ?? false;
-    };
+    const isLoading = () => readIsLoading(document);
 
     if (!isLoading()) {
       resolve();
@@ -242,7 +373,7 @@ function waitForLoadingToComplete(containerSelector: string, timeout = 10000): P
       }
     });
 
-    const container = document.querySelector(containerSelector);
+    const container = document.querySelector(selectors.accountsTable);
     if (container) {
       observer.observe(container, { childList: true, subtree: true, characterData: true });
     }
@@ -368,57 +499,160 @@ async function acquirePageAccess(
 /**
  * Navigate to a specific page in the accounts table
  */
-async function navigateToPage(targetPageNumber: number): Promise<void> {
-  const currentPageNumber = getCurrentPageNumber();
+/**
+ * Only one navigation may be in flight at a time.
+ *
+ * The page-access lock deliberately allows several role loads for the *same* page to run
+ * concurrently. Each of them calls navigateToPage, and without this guard they each read the
+ * current page and each click Next — so a single requested step moves two pages, and everyone
+ * ends up reading the wrong one. Serialising means the second caller waits, re-reads, and finds
+ * it has nothing to do.
+ */
+let navigationInFlight: Promise<boolean> | null = null;
 
-  // Debug: log pagination DOM state on first call
-  document.querySelector('[data-testid="pagination-bar"]');
-  document.querySelector('button[aria-label="Previous page"]');
-  document.querySelector('button[aria-label="Next page"]');
-
-  if (currentPageNumber === targetPageNumber) {
-    return;
+async function navigateToPage(targetPageNumber: number, timeout = 30000): Promise<boolean> {
+  // Wait out any navigation already running before deciding whether we need to move.
+  while (navigationInFlight) {
+    await navigationInFlight.catch(() => false);
   }
 
-  console.log(
-    `[navigateToPage] Navigating from page ${currentPageNumber} to page ${targetPageNumber}`
-  );
+  const alreadyThere = await waitForPaginationReady();
+  if (alreadyThere === targetPageNumber) {
+    return true;
+  }
 
-  if (targetPageNumber > currentPageNumber) {
-    // Go forward
-    for (let i = currentPageNumber; i < targetPageNumber; i++) {
-      await goToNextPage();
+  const run = performNavigation(targetPageNumber, timeout);
+  navigationInFlight = run;
+  try {
+    return await run;
+  } finally {
+    navigationInFlight = null;
+  }
+}
+
+async function performNavigation(targetPageNumber: number, timeout: number): Promise<boolean> {
+  const deadline = Date.now() + timeout;
+  let announced = false;
+
+  while (Date.now() < deadline) {
+    // Never act on a guessed page number: if the controls are mid-render, wait for them.
+    const currentPageNumber = await waitForPaginationReady();
+    if (currentPageNumber === null) {
+      console.warn("[navigateToPage] Pagination controls unavailable; retrying");
+      continue;
     }
-  } else {
-    // Go backward - click previous page button and wait for content to change
-    for (let i = currentPageNumber; i > targetPageNumber; i--) {
-      const prevButton = document.querySelector<HTMLButtonElement>(
-        'button[aria-label="Previous page"]'
+
+    const step = decideNavigationStep(
+      currentPageNumber,
+      targetPageNumber,
+      readHasNextPage(document),
+      readHasPrevPage(document)
+    );
+
+    if (step === "arrived") {
+      return true;
+    }
+
+    if (step === "wait" || step === "unreachable") {
+      // "unreachable" is not final either: the control may have been mid-render. Re-read and
+      // try again until the deadline rather than giving up on the wrong page.
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      continue;
+    }
+
+    if (!announced) {
+      console.log(
+        `[navigateToPage] Navigating from page ${currentPageNumber} to page ${targetPageNumber}`
       );
-      if (!prevButton || prevButton.hasAttribute("disabled")) break;
+      announced = true;
+    }
 
-      const firstRowText =
-        document.querySelector('table[role="treegrid"] tr[data-selection-item="item"] th')
-          ?.textContent ?? "";
+    const moved = step === "next" ? await goToNextPage() : await goToPrevPage();
 
-      prevButton.click();
-
-      // Wait for the first row's content to change (same detection as goToNextPage)
-      await new Promise<void>((resolve) => {
-        const maxWait = 5000;
-        const startTime = Date.now();
-        const interval = setInterval(() => {
-          const current =
-            document.querySelector('table[role="treegrid"] tr[data-selection-item="item"] th')
-              ?.textContent ?? "";
-          if (current !== firstRowText || Date.now() - startTime > maxWait) {
-            clearInterval(interval);
-            resolve();
-          }
-        }, 100);
-      });
+    if (!moved) {
+      // A failed step is not proof the target is unreachable — the control may simply have been
+      // re-rendering. Re-read the page and try again until the deadline.
+      await new Promise((resolve) => setTimeout(resolve, 250));
     }
   }
+
+  const finalPage = getCurrentPageNumber();
+  if (finalPage === targetPageNumber) {
+    return true;
+  }
+  console.warn(
+    `[navigateToPage] Gave up trying to reach page ${targetPageNumber}; still on ${finalPage}`
+  );
+  return false;
+}
+
+/**
+ * Wait for an account's row to be present on the currently displayed page.
+ *
+ * Polling rather than checking once: a page turn leaves the table re-rendering, so the row can
+ * be a moment behind the pagination state.
+ */
+async function waitForAccountRow(
+  accountId: string,
+  expectedPage: number | undefined,
+  timeout = 8000
+): Promise<Element | null> {
+  const deadline = Date.now() + timeout;
+  let reNavigated = false;
+
+  while (Date.now() < deadline) {
+    const row = findAccountRowById(document, accountId);
+    if (row) return row;
+
+    // A concurrent role load may have moved the portal on. Re-assert our page once before
+    // giving up, rather than reporting a row missing that is simply displayed elsewhere.
+    if (expectedPage !== undefined && !reNavigated) {
+      const current = getCurrentPageNumber();
+      if (current !== null && current !== expectedPage) {
+        reNavigated = true;
+        await navigateToPage(expectedPage);
+        continue;
+      }
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  return null;
+}
+
+/**
+ * Wait for the expanded role row belonging to an account.
+ *
+ * The row is re-resolved by account id on every poll rather than held as an element reference:
+ * the portal re-renders its table (page changes, virtualisation), which detaches the original
+ * `<tr>`. Polling a detached node waits forever for a sibling that will never arrive, which
+ * surfaced as "the expanded row never rendered" for accounts that were otherwise fine. If the
+ * re-render also collapsed the row, expand it again.
+ *
+ * Returns null on timeout. Callers must NOT fall back to searching the whole document: every
+ * other expanded account's roles live there too, and attributing them all to one account is
+ * exactly the "this account has dozens of roles" bug.
+ */
+async function waitForRoleRow(accountId: string, timeout = 10000): Promise<Element | null> {
+  const start = Date.now();
+  let reExpanded = 0;
+
+  while (Date.now() - start < timeout) {
+    const row = findAccountRowById(document, accountId);
+    if (row) {
+      const roleRow = getRoleRowFor(row);
+      if (roleRow) return roleRow;
+
+      // A re-render can drop the expanded state; re-open it rather than waiting on a row that
+      // is no longer coming.
+      if (!isRowExpanded(row) && reExpanded < 3) {
+        reExpanded++;
+        getRowExpandButton(row)?.click();
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  return null;
 }
 
 export async function getAccountRoles(account: Account | string): Promise<AccountRole[]> {
@@ -444,35 +678,33 @@ export async function getAccountRoles(account: Account | string): Promise<Accoun
       await navigateToPage(pageNumber);
     }
 
-    const rows = document.querySelectorAll<HTMLTableRowElement>(
-      'table[role="treegrid"] tr[data-selection-item="item"]'
-    );
-
-    let accountButton: HTMLButtonElement | null = null;
-    let matchedRow: HTMLTableRowElement | null = null;
-    for (const row of rows) {
-      const tds = row.querySelectorAll("td");
-      const firstTDText = tds[0]?.textContent?.trim();
-      if (firstTDText === accountId) {
-        accountButton = row.querySelector<HTMLButtonElement>("button[aria-expanded]");
-        matchedRow = row;
-        break;
-      }
+    const matchedRow = await waitForAccountRow(accountId, pageNumber);
+    if (!matchedRow) {
+      throw new Error(
+        `Account row not found for id: ${accountId} ` +
+          `(wanted page ${pageNumber ?? "any"}, portal is on page ${getCurrentPageNumber()})`
+      );
     }
 
-    if (!accountButton || !matchedRow) {
-      throw new Error(`Account button not found for id: ${accountId}`);
+    const accountButton = getRowExpandButton(matchedRow);
+    if (!accountButton) {
+      throw new Error(`Account expand button not found for id: ${accountId}`);
     }
 
-    // Use the table row as the scope for waiting for federation links
-    const rowElement = matchedRow;
-
-    if (accountButton.getAttribute("aria-expanded") !== "true") {
+    if (!isRowExpanded(matchedRow)) {
       accountButton.click();
-      // Wait for the expanded role row to be inserted after the current row
-      await new Promise((resolve) => setTimeout(resolve, 300));
     }
-    const roleRow = rowElement.nextElementSibling as Element | null;
+
+    // The portal injects the roles as a sibling row nested one aria-level deeper, after a
+    // network round trip. Wait for that row rather than assuming a fixed delay is enough:
+    // scoping role parsing to the whole document when it is missing attributes every role on
+    // the page to this one account.
+    const roleRow = await waitForRoleRow(accountId);
+    if (!roleRow) {
+      throw new Error(
+        `Roles did not appear for account ${accountId}: the expanded row never rendered`
+      );
+    }
 
     // Try up to 3 times to load roles, retrying on error
     const MAX_RETRIES = 3;
@@ -480,41 +712,20 @@ export async function getAccountRoles(account: Account | string): Promise<Accoun
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       try {
         // Wait for either federation link or error alert to appear in the expanded sibling row
-        await waitForAnyElement(
-          roleRow ?? document.body,
-          ['a[data-testid="federation-link"]', 'div[data-testid="error-component-alert"]'],
-          5000
-        );
-        const scope = roleRow ?? document.body;
+        await waitForAnyElement(roleRow, [selectors.federationLink, selectors.errorAlert], 5000);
+        const scope = roleRow;
 
-        // Check if federation link appeared
-        const federationLink = scope.querySelector('a[data-testid="federation-link"]');
-        if (federationLink) {
-          // Got the roles — collect all federation links in the expanded area
-          const allLinks = Array.from(
-            scope.querySelectorAll<HTMLAnchorElement>('a[data-testid="federation-link"]')
-          );
-          return allLinks.map((link) => {
-            const roleContainer =
-              link.closest('[data-testid="account-list-cell"]') || link.parentElement;
-            const accessKeysElement = roleContainer?.querySelector<HTMLElement>(
-              '[data-testid="role-creation-action-button"]'
-            );
-            return {
-              name: link.textContent?.trim() ?? "",
-              consoleUrl: link.href,
-              accessKeysElement: accessKeysElement ?? undefined,
-            };
-          });
+        const roles = parseRoles(scope);
+        if (roles.length > 0) {
+          return roles;
         }
 
         // Check if error alert appeared
-        const errorAlert = scope.querySelector('div[data-testid="error-component-alert"]');
+        const errorAlert = getErrorAlert(scope);
         if (errorAlert && attempt < MAX_RETRIES - 1) {
-          const retryButton = errorAlert.querySelector('button[data-testid="retry-button"]');
+          const retryButton = getRetryButton(errorAlert);
           if (retryButton) {
-            const errorMessage =
-              errorAlert.querySelector(".awsui_content_mx3cw_1ehno_391")?.textContent || "";
+            const errorMessage = getErrorMessage(scope) ?? "";
             // Wait times: 2s, 5s, 10s (longer for rate limiting)
             const isRateLimited = errorMessage.includes("HTTP 429");
             const waitTimes = [2000, 5000, 10000];
@@ -531,9 +742,7 @@ export async function getAccountRoles(account: Account | string): Promise<Accoun
         // If we got here, federation link didn't appear but error alert did
         if (errorAlert) {
           if (attempt === MAX_RETRIES - 1) {
-            const errorMessage =
-              errorAlert.querySelector(".awsui_content_mx3cw_1ehno_391")?.textContent ||
-              "Unknown error";
+            const errorMessage = getErrorMessage(scope) ?? "Unknown error";
             throw new Error(
               `Failed to load roles for account ${accountId} after ${MAX_RETRIES} attempts: ${errorMessage}`
             );
@@ -550,12 +759,9 @@ export async function getAccountRoles(account: Account | string): Promise<Accoun
           if (error instanceof Error && error.message.includes("Failed to load roles")) {
             throw error;
           }
-          const errorAlert = (roleRow ?? document.body).querySelector<Element>(
-            'div[data-testid="error-component-alert"]'
-          );
-          const errorMessage = errorAlert
-            ? errorAlert.querySelector(".awsui_content_mx3cw_1ehno_391")?.textContent ||
-              "Unknown error"
+          const scope = roleRow;
+          const errorMessage = getErrorAlert(scope)
+            ? (getErrorMessage(scope) ?? "Unknown error")
             : "Timeout waiting for roles";
           throw new Error(
             `Failed to load roles for account ${accountId} after ${MAX_RETRIES} attempts: ${errorMessage}`

@@ -19,3 +19,6 @@ web-ext.config.ts
 # Integration test configuration and cookies
 .test-config/
 .test-cookies/
+
+# Raw fixture captures (contain real account data until sanitised)
+.fixture-capture/

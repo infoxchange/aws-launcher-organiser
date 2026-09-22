@@ -9,7 +9,7 @@ import type React from "react";
 import { useState } from "react";
 import type { SortConfig, TagConfig } from "../utils/configStore";
 import { formatConfig, RemoteConfigSchema, useConfigStore } from "../utils/configStore";
-import { ensureUrlPermission } from "../utils/permissions";
+import { ensureUrlPermission, testRemoteConfigUrl } from "../utils/permissions";
 import { SortingSettings } from "./SortingSettings";
 import { TagSettings } from "./TagSettings";
 import "./SettingsDialog.css";
@@ -139,35 +139,32 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
 
   const runConnectionTest = async () => {
     if (!draftAutoUpdateUrl) return;
+    console.log("[SettingsDialog] Starting connection test");
     setTestStatus("loading");
     setTestMessage(null);
     try {
-      // Request permission for the URL before attempting to fetch
-      const hasPermission = await ensureUrlPermission(draftAutoUpdateUrl);
-      if (!hasPermission) {
+      // Request the host permission on every browser. Firefox needs this just as much as
+      // Chrome: without a granted host permission the background fetch is subject to CORS, so
+      // it only succeeds against servers that happen to send permissive CORS headers.
+      // This runs from the Test button's click handler, which satisfies Firefox's requirement
+      // that permissions.request() be called from a user input handler.
+      const permissionGranted = await ensureUrlPermission(draftAutoUpdateUrl);
+      console.log("[SettingsDialog] Permission result:", permissionGranted);
+
+      // Use the background script to perform the fetch
+      // This avoids CORS restrictions in content scripts
+      console.log("[SettingsDialog] Testing remote config URL");
+      const testResult = await testRemoteConfigUrl(draftAutoUpdateUrl, draftAutoUpdateAuthToken);
+
+      if (!testResult.success) {
+        console.log("[SettingsDialog] Test failed:", testResult.error);
         setTestStatus("error");
-        setTestMessage("Permission denied for this URL");
+        setTestMessage(`Error: ${testResult.error}`);
         return;
       }
 
-      const headers: Record<string, string> = {};
-      if (draftAutoUpdateAuthToken) headers.Authorization = `Bearer ${draftAutoUpdateAuthToken}`;
-      const response = await fetch(draftAutoUpdateUrl, { headers });
-      if (!response.ok) {
-        setTestStatus("error");
-        setTestMessage(`HTTP ${response.status}: ${response.statusText}`);
-        return;
-      }
-      let json: unknown;
-      try {
-        json = await response.json();
-      } catch {
-        setTestStatus("error");
-        setTestMessage("Response is not valid JSON.");
-        return;
-      }
-      const result = RemoteConfigSchema.safeParse(json);
-      console.log("Validation result:", result);
+      const result = RemoteConfigSchema.safeParse(testResult.data);
+      console.log("[SettingsDialog] Validation result:", result);
       if (!result.success) {
         setTestStatus("error");
         setTestMessage(
@@ -175,6 +172,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
         );
         return;
       }
+      console.log("[SettingsDialog] Test successful!");
       setTestStatus("success");
       setTestMessage(
         `Config updated — ${result.data.groups.length} top-level group(s), version ${result.data.version}.`
@@ -183,6 +181,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
     } catch (err) {
       setTestStatus("error");
       const errorMsg = err instanceof Error ? err.message : String(err);
+      console.error("[SettingsDialog] Test connection failed:", errorMsg);
       setTestMessage(`Error: ${errorMsg}`);
     }
   };

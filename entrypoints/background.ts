@@ -123,52 +123,69 @@ export default defineBackground({
   main() {
     console.log("Background service worker loaded");
 
-    // Handle permission-related messages from UI components
+    // Handle permission-related and config test messages from UI components
     chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-      if (message.type === "CHECK_URL_PERMISSION") {
-        try {
-          const pattern = getHostPermissionPattern(message.url);
-          console.log(`[permissions] Checking permission for: ${pattern}`);
-          chrome.permissions.contains({ origins: [pattern] }, (result) => {
-            console.log(`[permissions] Check result for ${pattern}:`, result);
-            if (chrome.runtime.lastError) {
-              console.error(`[permissions] Check error:`, chrome.runtime.lastError);
-              sendResponse({ hasPermission: false, error: chrome.runtime.lastError.message });
-            } else {
-              sendResponse({ hasPermission: result === true });
-            }
-          });
-        } catch (error) {
-          console.error(`[permissions] Check exception:`, error);
-          sendResponse({
-            hasPermission: false,
-            error: error instanceof Error ? error.message : String(error),
-          });
-        }
-        return true; // indicate we'll send a response asynchronously
+      if (message.type === "CHECK_PERMISSION") {
+        // Check if permission exists for the given pattern
+        console.log("[background] Checking permission for:", message.pattern);
+        chrome.permissions.contains({ origins: [message.pattern] }, (result) => {
+          console.log("[background] Permission check result:", result);
+          sendResponse({ hasPermission: result === true });
+        });
+        // Return true to indicate we'll send a response asynchronously
+        return true;
       }
 
-      if (message.type === "REQUEST_URL_PERMISSION") {
-        try {
-          const pattern = getHostPermissionPattern(message.url);
-          console.log(`[permissions] Requesting permission for: ${pattern}`);
-          chrome.permissions.request({ origins: [pattern] }, (granted) => {
-            console.log(`[permissions] Request result for ${pattern}:`, granted);
-            if (chrome.runtime.lastError) {
-              console.error(`[permissions] Request error:`, chrome.runtime.lastError);
-              sendResponse({ granted: false, error: chrome.runtime.lastError.message });
-            } else {
-              sendResponse({ granted: granted === true });
+      if (message.type === "REQUEST_PERMISSION") {
+        // Request permission for the given pattern
+        console.log("[background] Requesting permission for:", message.pattern);
+        chrome.permissions.request({ origins: [message.pattern] }, (granted) => {
+          console.log("[background] Permission request callback, granted:", granted);
+          sendResponse({ granted: granted === true });
+        });
+        // Return true to indicate we'll send a response asynchronously
+        return true;
+      }
+
+      if (message.type === "TEST_REMOTE_CONFIG") {
+        // Test connection to a remote config URL
+        (async () => {
+          try {
+            const headers: Record<string, string> = {};
+            if (message.authToken) {
+              headers.Authorization = `Bearer ${message.authToken}`;
             }
-          });
-        } catch (error) {
-          console.error(`[permissions] Request exception:`, error);
-          sendResponse({
-            granted: false,
-            error: error instanceof Error ? error.message : String(error),
-          });
-        }
-        return true; // indicate we'll send a response asynchronously
+
+            const response = await fetch(message.url, { headers });
+            if (!response.ok) {
+              sendResponse({
+                success: false,
+                error: `HTTP ${response.status}: ${response.statusText}`,
+              });
+              return;
+            }
+
+            let json: unknown;
+            try {
+              json = await response.json();
+            } catch {
+              sendResponse({
+                success: false,
+                error: "Response is not valid JSON.",
+              });
+              return;
+            }
+
+            sendResponse({ success: true, data: json });
+          } catch (err) {
+            sendResponse({
+              success: false,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+        })();
+        // Return true to indicate we'll send a response asynchronously
+        return true;
       }
 
       if (message.type === "FETCH_IMAGE") {

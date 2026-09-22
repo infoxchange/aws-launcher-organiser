@@ -1,0 +1,53 @@
+<!doctype html>
+<!--
+  SYNTHETIC FIXTURE — hand-authored, NOT captured from AWS.
+
+  Every other fixture in this directory is a sanitised capture of the real portal. This one is
+  not: forcing the portal into a role-loading failure on demand is not something we can do, so
+  the error markup below is reconstructed from the selectors the extension already relied on
+  (data-testid="error-component-alert" and data-testid="retry-button").
+
+  What that means for tests built on it: they exercise our error-handling CONTROL FLOW (is the
+  alert detected, is the message read, is the retry button found), not AWS's actual error markup.
+  If a real error state is ever captured, replace this file with it and delete this notice.
+
+  @see docs/testing.md § "Fixtures"
+-->
+<html lang="en">
+<head><meta charset="utf-8"><title>AWS access portal fixture — role load error</title></head>
+<body>
+<div role="tabpanel">
+  <table role="treegrid" aria-colcount="3">
+    <tbody>
+      <tr data-selection-item="item" aria-rowindex="2" aria-level="1" aria-setsize="1" aria-posinset="1">
+        <th aria-colindex="1" scope="row">
+          <div>
+            <button type="button" tabindex="-1" aria-expanded="true"></button>
+          </div>
+          <div><div><div data-testid="account-list-cell" role="button" tabindex="0"><div>teama-svc0-prod</div></div></div></div>
+        </th>
+        <td aria-colindex="2"><div><div><a data-testid="account-federation-link" href="https://fixture.awsapps.com/start/#/saml/custom/placeholder"><span>100000000000</span></a></div></div></td>
+        <td aria-colindex="3"><div><div><div>aws-account-1@example.com</div></div></div></td>
+      </tr>
+      <tr data-selection-item="item" aria-rowindex="3" aria-level="2" aria-setsize="1" aria-posinset="1">
+        <th aria-colindex="1" scope="row">
+          <div>
+            <div data-testid="error-component-alert" role="alert">
+              <div class="awsui_content_hashwillchange_123">Unable to load roles: HTTP 429 Too Many Requests</div>
+              <button type="button" data-testid="retry-button">Retry</button>
+            </div>
+          </div>
+        </th>
+        <td aria-colindex="2"><div></div></td>
+        <td aria-colindex="3"><div></div></td>
+      </tr>
+    </tbody>
+  </table>
+  <ul aria-label="">
+    <li><button type="button" aria-label="Previous page" tabindex="-1" aria-current="false" aria-disabled="true" class="awsui_arrow_x awsui_button_x awsui_button-disabled_x">&lt;</button></li>
+    <li><button type="button" aria-label="Page 1" tabindex="0" aria-current="true" class="awsui_page-number_x awsui_button_x awsui_button-current_x">1</button></li>
+    <li><button type="button" aria-label="Next page" tabindex="-1" aria-current="false" aria-disabled="true" class="awsui_arrow_x awsui_button_x awsui_button-disabled_x">&gt;</button></li>
+  </ul>
+</div>
+</body>
+</html>

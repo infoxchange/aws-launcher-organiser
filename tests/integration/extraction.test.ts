@@ -4,9 +4,9 @@
  */
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { waitForAccountsToLoad } from "../../src/utils/test-browser";
 import type { IntegrationTestContext } from "../integration.setup";
-import { createTestContext } from "../integration.setup";
+import { cleanupTestContext, closeBrowser, createTestContext } from "../integration.setup";
+import { waitForAccountsToLoad } from "../support/test-browser";
 
 describe("AWS Launcher Organiser Extension - Integration Tests", () => {
   let ctx: IntegrationTestContext;
@@ -19,7 +19,10 @@ describe("AWS Launcher Organiser Extension - Integration Tests", () => {
     if (ctx) {
       await cleanupTestContext(ctx);
     }
-    // Note: closeBrowser() is called from vitest test reporter
+    // Vitest isolates each test file in its own module registry, so the persistent context
+    // created by this file is only ever used by this file. Close it here or the browser
+    // process outlives the run.
+    await closeBrowser();
   });
 
   it("should load the SSO page with the extension", async () => {
